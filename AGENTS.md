@@ -10,7 +10,7 @@ func foo(arg1 string, arg2 string, arg3 string, arg4 string) {
     // ...
 }
 
-//More legible and easier to maintain.
+// More legible and easier to maintain.
 func foo(
     arg1 string,
     arg2 string, 
@@ -20,3 +20,7 @@ func foo(
     // ... 
 }
 ```
+
+## Coding legibility
+
+Ensure the code is legible. Add newlines before and after control structures and definitions to improve code readability and maintainability.
