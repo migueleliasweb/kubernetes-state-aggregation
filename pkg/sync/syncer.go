@@ -3,7 +3,7 @@ package sync
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 
 	"github.com/migueleliasweb/kubernetes-state-aggregation/pkg/config"
 	"github.com/migueleliasweb/kubernetes-state-aggregation/pkg/db"
@@ -43,16 +43,33 @@ func NewClusterSyncer(
 
 // Start begins dynamic resource discovery, sets up informers, and blocks until ctx is cancelled.
 func (cs *ClusterSyncer) Start(ctx context.Context) error {
-	log.Printf("[%s] Starting cluster syncer...", cs.clusterCfg.Name)
+	slog.Info(
+		"Starting cluster syncer...",
+		"cluster",
+		cs.clusterCfg.Name,
+	)
 
-	gvrs, err := k8s.DiscoverWatchableResources(cs.discClient, cs.filters)
+	gvrs, err := k8s.DiscoverWatchableResources(
+		cs.discClient,
+		cs.filters,
+	)
+
 	if err != nil {
 		return fmt.Errorf("[%s] dynamic discovery failed: %w", cs.clusterCfg.Name, err)
 	}
 
-	log.Printf("[%s] Discovered %d watchable GVRs", cs.clusterCfg.Name, len(gvrs))
+	slog.Info(
+		"Discovered watchable GVRs",
+		"cluster",
+		cs.clusterCfg.Name,
+		"count",
+		len(gvrs),
+	)
 
-	factory := dynamicinformer.NewDynamicSharedInformerFactory(cs.dynClient, 0)
+	factory := dynamicinformer.NewDynamicSharedInformerFactory(
+		cs.dynClient,
+		0,
+	)
 
 	for _, gvr := range gvrs {
 		informer := factory.ForResource(gvr).Informer()
@@ -63,11 +80,24 @@ func (cs *ClusterSyncer) Start(ctx context.Context) error {
 				if !ok {
 					return
 				}
+
 				if !cs.filters.MatchesNamespace(u.GetNamespace()) {
 					return
 				}
-				if err := cs.store.UpsertResource(ctx, cs.clusterCfg.Name, u); err != nil {
-					log.Printf("[%s] error upserting %s/%s (%s): %v", cs.clusterCfg.Name, u.GetNamespace(), u.GetName(), gvr.Resource, err)
+
+				if err := cs.store.UpsertResource(
+					ctx,
+					cs.clusterCfg.Name,
+					u,
+				); err != nil {
+					slog.Error(
+						"error upserting resource",
+						"cluster", cs.clusterCfg.Name,
+						"namespace", u.GetNamespace(),
+						"name", u.GetName(),
+						"resource", gvr.Resource,
+						"err", err,
+					)
 				}
 			},
 			UpdateFunc: func(oldObj, newObj interface{}) {
@@ -75,49 +105,118 @@ func (cs *ClusterSyncer) Start(ctx context.Context) error {
 				if !ok {
 					return
 				}
+
 				if !cs.filters.MatchesNamespace(u.GetNamespace()) {
 					return
 				}
-				if err := cs.store.UpsertResource(ctx, cs.clusterCfg.Name, u); err != nil {
-					log.Printf("[%s] error updating %s/%s (%s): %v", cs.clusterCfg.Name, u.GetNamespace(), u.GetName(), gvr.Resource, err)
+
+				if err := cs.store.UpsertResource(
+					ctx,
+					cs.clusterCfg.Name,
+					u,
+				); err != nil {
+					slog.Error(
+						"error updating resource",
+						"cluster",
+						cs.clusterCfg.Name,
+						"namespace",
+						u.GetNamespace(),
+						"name",
+						u.GetName(),
+						"resource",
+						gvr.Resource,
+						"error",
+						err,
+					)
 				}
 			},
 			DeleteFunc: func(obj interface{}) {
 				var u *unstructured.Unstructured
 				var ok bool
+
 				u, ok = obj.(*unstructured.Unstructured)
 				if !ok {
 					tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
 					if !ok {
 						return
 					}
+
 					u, ok = tombstone.Obj.(*unstructured.Unstructured)
 					if !ok {
 						return
 					}
 				}
+
 				gvk := u.GroupVersionKind()
-				if err := cs.store.DeleteResource(ctx, cs.clusterCfg.Name, gvk.Group, gvk.Version, gvk.Kind, u.GetNamespace(), u.GetName()); err != nil {
-					log.Printf("[%s] error deleting %s/%s (%s): %v", cs.clusterCfg.Name, u.GetNamespace(), u.GetName(), gvr.Resource, err)
+
+				if err := cs.store.DeleteResource(
+					ctx,
+					cs.clusterCfg.Name,
+					gvk.Group,
+					gvk.Version,
+					gvk.Kind,
+					u.GetNamespace(),
+					u.GetName(),
+				); err != nil {
+					slog.Error(
+						"error deleting resource",
+						"cluster",
+						cs.clusterCfg.Name,
+						"namespace",
+						u.GetNamespace(),
+						"name",
+						u.GetName(),
+						"resource",
+						gvr.Resource,
+						"error",
+						err,
+					)
 				}
 			},
 		})
+
 		if err != nil {
-			log.Printf("[%s] warning: failed to add event handler for %s: %v", cs.clusterCfg.Name, gvr.String(), err)
+			slog.Warn(
+				"failed to add event handler for GVR",
+				"cluster",
+				cs.clusterCfg.Name,
+				"gvr",
+				gvr.String(),
+				"error",
+				err,
+			)
 		}
 	}
 
 	factory.Start(ctx.Done())
+
 	synced := factory.WaitForCacheSync(ctx.Done())
 
 	for gvr, isSynced := range synced {
 		if !isSynced {
-			log.Printf("[%s] warning: cache sync failed for GVR %s", cs.clusterCfg.Name, gvr.String())
+			slog.Warn(
+				"cache sync failed for GVR",
+				"cluster",
+				cs.clusterCfg.Name,
+				"gvr",
+				gvr.String(),
+			)
 		}
 	}
 
-	log.Printf("[%s] Cluster syncer active and watching resources", cs.clusterCfg.Name)
+	slog.Info(
+		"Cluster syncer active and watching resources",
+		"cluster",
+		cs.clusterCfg.Name,
+	)
+
 	<-ctx.Done()
-	log.Printf("[%s] Cluster syncer shutting down", cs.clusterCfg.Name)
+
+	slog.Info(
+		"Cluster syncer shutting down",
+		"cluster",
+		cs.clusterCfg.Name,
+	)
+
 	return nil
 }

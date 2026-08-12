@@ -2,7 +2,8 @@ package main
 
 import (
 	"context"
-	"log"
+	"fmt"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
@@ -17,6 +18,7 @@ var (
 	configPath    string
 	clusterFilter string
 	dbURL         string
+	logLevel      string
 )
 
 func newRootCmd() *cobra.Command {
@@ -25,38 +27,111 @@ func newRootCmd() *cobra.Command {
 		Short: "Kubernetes State Aggregation (KSA) Sync Worker",
 		Long:  "Syncs remote state from multiple Kubernetes API Servers onto the central PostgreSQL datastore layer.",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			log.Println("Starting Kubernetes State Aggregation (KSA) Sync Worker...")
+			var level slog.Level
+			if err := level.UnmarshalText([]byte(logLevel)); err != nil {
+				return fmt.Errorf("invalid log level %q: %w", logLevel, err)
+			}
 
-			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+			handler := slog.NewJSONHandler(
+				os.Stdout,
+				&slog.HandlerOptions{
+					AddSource: true,
+					Level:     level,
+				},
+			)
+			logger := slog.New(handler)
+			slog.SetDefault(logger)
+
+			slog.Info("Starting Kubernetes State Aggregation (KSA) Sync Worker...")
+
+			ctx, stop := signal.NotifyContext(
+				context.Background(),
+				os.Interrupt,
+				syscall.SIGTERM,
+			)
 			defer stop()
 
 			cfg, err := config.LoadConfig(configPath)
 			if err != nil {
-				log.Fatalf("Failed to load configuration file %s: %v", configPath, err)
+				slog.Error(
+					"Failed to load configuration file",
+					"path",
+					configPath,
+					"error",
+					err,
+				)
+				os.Exit(1)
 			}
 
 			store, err := db.NewStore(dbURL)
 			if err != nil {
-				log.Fatalf("Failed to connect to database: %v", err)
+				slog.Error(
+					"Failed to connect to database",
+					"error",
+					err,
+				)
+				os.Exit(1)
 			}
 			defer store.Close()
 
 			if err := store.InitSchema(ctx); err != nil {
-				log.Fatalf("Failed to initialize database schema: %v", err)
+				slog.Error(
+					"Failed to initialize database schema",
+					"error",
+					err,
+				)
+				os.Exit(1)
 			}
-			log.Println("Database schema initialized successfully")
 
-			manager := sync.NewManager(cfg, store, clusterFilter)
+			slog.Info("Database schema initialized successfully")
+
+			manager := sync.NewManager(
+				cfg,
+				store,
+				clusterFilter,
+			)
+
 			if err := manager.Start(ctx); err != nil {
-				log.Fatalf("Sync Manager stopped with error: %v", err)
+				slog.Error(
+					"Sync Manager stopped with error",
+					"error",
+					err,
+				)
+				os.Exit(1)
 			}
+
 			return nil
 		},
 	}
 
-	cmd.Flags().StringVarP(&configPath, "config", "c", "config.yaml", "Path to the KSA sync worker configuration YAML/JSON file")
-	cmd.Flags().StringVarP(&clusterFilter, "cluster", "l", "", "Optional cluster name to isolate sync execution to a single cluster")
-	cmd.Flags().StringVarP(&dbURL, "db-url", "d", "postgres://postgres:postgres@localhost:5432/ksa?sslmode=disable", "PostgreSQL database connection URL")
+	cmd.Flags().StringVarP(
+		&configPath,
+		"config",
+		"c",
+		"config.yaml",
+		"Path to the KSA sync worker configuration YAML/JSON file",
+	)
+	cmd.Flags().StringVarP(
+		&clusterFilter,
+		"cluster",
+		"l",
+		"",
+		"Optional cluster name to isolate sync execution to a single cluster",
+	)
+	cmd.Flags().StringVarP(
+		&dbURL,
+		"db-url",
+		"d",
+		"postgres://postgres:postgres@localhost:5432/ksa?sslmode=disable",
+		"PostgreSQL database connection URL",
+	)
+	cmd.Flags().StringVarP(
+		&logLevel,
+		"log-level",
+		"v",
+		"info",
+		"Log level (debug, info, warn, error)",
+	)
 
 	return cmd
 }

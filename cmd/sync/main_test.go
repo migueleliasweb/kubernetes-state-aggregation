@@ -27,4 +27,8 @@ func TestCobraRootCmdFlags(t *testing.T) {
 	if !bytes.Contains([]byte(output), []byte("--db-url")) {
 		t.Errorf("expected help output to contain --db-url flag")
 	}
+
+	if !bytes.Contains([]byte(output), []byte("--log-level")) {
+		t.Errorf("expected help output to contain --log-level flag")
+	}
 }
