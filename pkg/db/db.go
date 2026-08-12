@@ -29,8 +29,20 @@ type ResourceRecord struct {
 // Store defines operations for managing aggregated Kubernetes state.
 type Store interface {
 	InitSchema(ctx context.Context) error
-	UpsertResource(ctx context.Context, clusterName string, u *unstructured.Unstructured) error
-	DeleteResource(ctx context.Context, clusterName, group, version, kind, namespace, name string) error
+	UpsertResource(
+		ctx context.Context,
+		clusterName string,
+		u *unstructured.Unstructured,
+	) error
+	DeleteResource(
+		ctx context.Context,
+		clusterName string,
+		group string,
+		version string,
+		kind string,
+		namespace string,
+		name string,
+	) error
 	Close() error
 }
 
@@ -88,7 +100,11 @@ func (s *DBStore) InitSchema(ctx context.Context) error {
 }
 
 // UpsertResource inserts or updates a resource manifest in the datastore.
-func (s *DBStore) UpsertResource(ctx context.Context, clusterName string, u *unstructured.Unstructured) error {
+func (s *DBStore) UpsertResource(
+	ctx context.Context,
+	clusterName string,
+	u *unstructured.Unstructured,
+) error {
 	gvk := u.GroupVersionKind()
 	labels := u.GetLabels()
 	if labels == nil {
@@ -139,7 +155,15 @@ func (s *DBStore) UpsertResource(ctx context.Context, clusterName string, u *uns
 }
 
 // DeleteResource removes a resource from the datastore.
-func (s *DBStore) DeleteResource(ctx context.Context, clusterName, group, version, kind, namespace, name string) error {
+func (s *DBStore) DeleteResource(
+	ctx context.Context,
+	clusterName string,
+	group string,
+	version string,
+	kind string,
+	namespace string,
+	name string,
+) error {
 	query := `
 	DELETE FROM resources
 	WHERE cluster_name = $1

@@ -22,7 +22,11 @@ type Manager struct {
 }
 
 // NewManager creates a new multi-cluster Manager.
-func NewManager(cfg *config.Config, store db.Store, targetCluster string) *Manager {
+func NewManager(
+	cfg *config.Config,
+	store db.Store,
+	targetCluster string,
+) *Manager {
 	return &Manager{
 		cfg:           cfg,
 		store:         store,

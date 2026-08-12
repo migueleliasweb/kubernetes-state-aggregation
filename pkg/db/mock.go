@@ -25,11 +25,22 @@ func (m *MockStore) InitSchema(ctx context.Context) error {
 	return nil
 }
 
-func (m *MockStore) getKey(clusterName, group, version, kind, namespace, name string) string {
+func (m *MockStore) getKey(
+	clusterName string,
+	group string,
+	version string,
+	kind string,
+	namespace string,
+	name string,
+) string {
 	return fmt.Sprintf("%s/%s/%s/%s/%s/%s", clusterName, group, version, kind, namespace, name)
 }
 
-func (m *MockStore) UpsertResource(ctx context.Context, clusterName string, u *unstructured.Unstructured) error {
+func (m *MockStore) UpsertResource(
+	ctx context.Context,
+	clusterName string,
+	u *unstructured.Unstructured,
+) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -39,7 +50,15 @@ func (m *MockStore) UpsertResource(ctx context.Context, clusterName string, u *u
 	return nil
 }
 
-func (m *MockStore) DeleteResource(ctx context.Context, clusterName, group, version, kind, namespace, name string) error {
+func (m *MockStore) DeleteResource(
+	ctx context.Context,
+	clusterName string,
+	group string,
+	version string,
+	kind string,
+	namespace string,
+	name string,
+) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -48,7 +67,14 @@ func (m *MockStore) DeleteResource(ctx context.Context, clusterName, group, vers
 	return nil
 }
 
-func (m *MockStore) GetResource(clusterName, group, version, kind, namespace, name string) *unstructured.Unstructured {
+func (m *MockStore) GetResource(
+	clusterName string,
+	group string,
+	version string,
+	kind string,
+	namespace string,
+	name string,
+) *unstructured.Unstructured {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
