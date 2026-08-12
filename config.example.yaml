@@ -1,0 +1,35 @@
+# Kubernetes State Aggregation (KSA) - Sync Worker Configuration Example
+
+global_filters:
+  include_namespaces:
+    - "default"
+    - "kube-system"
+    - "app-*"
+  exclude_namespaces:
+    - "temp-*"
+  exclude_resources:
+    - "events"
+    - "coordination.k8s.io/v1/leases"
+  label_selector: "environment!=scratch"
+
+clusters:
+  - name: us1
+    api_server: "https://127.0.0.1:6443"
+    kubeconfig: "~/.kube/config"
+    context: "kind-us1"
+    disabled: false
+
+  - name: eu1
+    api_server: "https://eu1.k8s.local:6443"
+    kubeconfig: "~/.kube/config"
+    context: "kind-eu1"
+    filters:
+      include_namespaces:
+        - "production"
+        - "staging"
+
+  - name: ap1
+    api_server: "https://ap1.k8s.local:6443"
+    kubeconfig: "~/.kube/config"
+    context: "kind-ap1"
+    disabled: true
