@@ -55,11 +55,10 @@ func newRootCmd() *cobra.Command {
 			if err != nil {
 				slog.Error(
 					"Failed to load configuration file",
-					"path",
-					configPath,
-					"error",
-					err,
+					"path", configPath,
+					"err", err,
 				)
+
 				os.Exit(1)
 			}
 
@@ -67,9 +66,9 @@ func newRootCmd() *cobra.Command {
 			if err != nil {
 				slog.Error(
 					"Failed to connect to database",
-					"error",
-					err,
+					"err", err,
 				)
+
 				os.Exit(1)
 			}
 			defer store.Close()
@@ -77,9 +76,9 @@ func newRootCmd() *cobra.Command {
 			if err := store.InitSchema(ctx); err != nil {
 				slog.Error(
 					"Failed to initialize database schema",
-					"error",
-					err,
+					"err", err,
 				)
+
 				os.Exit(1)
 			}
 
@@ -94,9 +93,9 @@ func newRootCmd() *cobra.Command {
 			if err := manager.Start(ctx); err != nil {
 				slog.Error(
 					"Sync Manager stopped with error",
-					"error",
-					err,
+					"err", err,
 				)
+
 				os.Exit(1)
 			}
 

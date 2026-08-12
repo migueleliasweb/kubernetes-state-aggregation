@@ -45,8 +45,7 @@ func NewClusterSyncer(
 func (cs *ClusterSyncer) Start(ctx context.Context) error {
 	slog.Info(
 		"Starting cluster syncer...",
-		"cluster",
-		cs.clusterCfg.Name,
+		"cluster", cs.clusterCfg.Name,
 	)
 
 	gvrs, err := k8s.DiscoverWatchableResources(
@@ -60,10 +59,8 @@ func (cs *ClusterSyncer) Start(ctx context.Context) error {
 
 	slog.Info(
 		"Discovered watchable GVRs",
-		"cluster",
-		cs.clusterCfg.Name,
-		"count",
-		len(gvrs),
+		"cluster", cs.clusterCfg.Name,
+		"count", len(gvrs),
 	)
 
 	factory := dynamicinformer.NewDynamicSharedInformerFactory(
@@ -117,16 +114,11 @@ func (cs *ClusterSyncer) Start(ctx context.Context) error {
 				); err != nil {
 					slog.Error(
 						"error updating resource",
-						"cluster",
-						cs.clusterCfg.Name,
-						"namespace",
-						u.GetNamespace(),
-						"name",
-						u.GetName(),
-						"resource",
-						gvr.Resource,
-						"error",
-						err,
+						"cluster", cs.clusterCfg.Name,
+						"namespace", u.GetNamespace(),
+						"name", u.GetName(),
+						"resource", gvr.Resource,
+						"err", err,
 					)
 				}
 			},
@@ -160,16 +152,11 @@ func (cs *ClusterSyncer) Start(ctx context.Context) error {
 				); err != nil {
 					slog.Error(
 						"error deleting resource",
-						"cluster",
-						cs.clusterCfg.Name,
-						"namespace",
-						u.GetNamespace(),
-						"name",
-						u.GetName(),
-						"resource",
-						gvr.Resource,
-						"error",
-						err,
+						"cluster", cs.clusterCfg.Name,
+						"namespace", u.GetNamespace(),
+						"name", u.GetName(),
+						"resource", gvr.Resource,
+						"err", err,
 					)
 				}
 			},
@@ -178,12 +165,9 @@ func (cs *ClusterSyncer) Start(ctx context.Context) error {
 		if err != nil {
 			slog.Warn(
 				"failed to add event handler for GVR",
-				"cluster",
-				cs.clusterCfg.Name,
-				"gvr",
-				gvr.String(),
-				"error",
-				err,
+				"cluster", cs.clusterCfg.Name,
+				"gvr", gvr.String(),
+				"err", err,
 			)
 		}
 	}
@@ -196,26 +180,22 @@ func (cs *ClusterSyncer) Start(ctx context.Context) error {
 		if !isSynced {
 			slog.Warn(
 				"cache sync failed for GVR",
-				"cluster",
-				cs.clusterCfg.Name,
-				"gvr",
-				gvr.String(),
+				"cluster", cs.clusterCfg.Name,
+				"gvr", gvr.String(),
 			)
 		}
 	}
 
 	slog.Info(
 		"Cluster syncer active and watching resources",
-		"cluster",
-		cs.clusterCfg.Name,
+		"cluster", cs.clusterCfg.Name,
 	)
 
 	<-ctx.Done()
 
 	slog.Info(
 		"Cluster syncer shutting down",
-		"cluster",
-		cs.clusterCfg.Name,
+		"cluster", cs.clusterCfg.Name,
 	)
 
 	return nil

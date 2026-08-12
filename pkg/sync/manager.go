@@ -44,8 +44,7 @@ func (m *Manager) Start(ctx context.Context) error {
 		if cluster.Disabled {
 			slog.Info(
 				"Cluster is disabled, skipping",
-				"cluster",
-				cluster.Name,
+				"cluster", cluster.Name,
 			)
 
 			continue
@@ -54,10 +53,8 @@ func (m *Manager) Start(ctx context.Context) error {
 		if m.targetCluster != "" && cluster.Name != m.targetCluster {
 			slog.Info(
 				"Skipping cluster",
-				"cluster",
-				cluster.Name,
-				"target_filter",
-				m.targetCluster,
+				"cluster", cluster.Name,
+				"target_filter", m.targetCluster,
 			)
 
 			continue
@@ -78,10 +75,8 @@ func (m *Manager) Start(ctx context.Context) error {
 			if err != nil {
 				slog.Error(
 					"error building kubeconfig",
-					"cluster",
-					c.Name,
-					"error",
-					err,
+					"cluster", c.Name,
+					"err", err,
 				)
 
 				return
@@ -91,10 +86,8 @@ func (m *Manager) Start(ctx context.Context) error {
 			if err != nil {
 				slog.Error(
 					"error creating dynamic client",
-					"cluster",
-					c.Name,
-					"error",
-					err,
+					"cluster", c.Name,
+					"err", err,
 				)
 
 				return
@@ -104,10 +97,8 @@ func (m *Manager) Start(ctx context.Context) error {
 			if err != nil {
 				slog.Error(
 					"error creating discovery client",
-					"cluster",
-					c.Name,
-					"error",
-					err,
+					"cluster", c.Name,
+					"err", err,
 				)
 
 				return
@@ -124,10 +115,8 @@ func (m *Manager) Start(ctx context.Context) error {
 			if err := syncer.Start(ctx); err != nil {
 				slog.Error(
 					"syncer stopped with error",
-					"cluster",
-					c.Name,
-					"error",
-					err,
+					"cluster", c.Name,
+					"err", err,
 				)
 			}
 		}(clusterCopy)
@@ -139,8 +128,7 @@ func (m *Manager) Start(ctx context.Context) error {
 
 	slog.Info(
 		"Sync Manager running",
-		"active_cluster_syncers",
-		activeCount,
+		"active_cluster_syncers", activeCount,
 	)
 
 	<-ctx.Done()
