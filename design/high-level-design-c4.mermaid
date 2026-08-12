@@ -1,0 +1,19 @@
+C4Context
+    title Kubernetes State Aggregation - High Level Design
+
+    Person(client, "Administrator", "Uses kubectl or ksacli <br />to interact with aggregated <br />and regional endpoints")
+
+    System_Ext(k8s_us1, "Kubernetes API Server US1", "Remote Kubernetes cluster API server in US1")
+    System_Ext(k8s_eu1, "Kubernetes API Server EU1", "Remote Kubernetes cluster API server in EU1")
+    System_Ext(k8s_ap1, "Kubernetes API Server AP1", "Remote Kubernetes cluster API server in AP1")
+
+    System_Boundary(ksa, "Kubernetes State Aggregation (KSA)") {
+        System(ksa_api, "Kubernetes State Aggregation API", "Exposes aggregated API proxy on port 8080 <br />and regional proxies on ports 8081-8083")
+        SystemDb(db, "PostgreSQL", "Stores aggregated <br/> Kubernetes state")
+    }
+
+    Rel(client, ksa_api, "Supports native <br/>kubectl queries")
+    Rel(ksa_api, db, "Aggregates <br />state into", "SQL")
+    Rel(ksa_api, k8s_us1, "Watches resources <br/>from")
+    Rel(ksa_api, k8s_eu1, "Watches resources <br/>from")
+    Rel(ksa_api, k8s_ap1, "Watches resources <br/>from")

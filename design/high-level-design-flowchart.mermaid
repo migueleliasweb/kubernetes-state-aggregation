@@ -1,0 +1,24 @@
+flowchart TD
+    K8s1{{Kubernetes API Server US1}}
+    K8s2{{Kubernetes API Server EU1}}
+    K8s3{{Kubernetes API Server AP1}}
+    
+    subgraph KSA
+        KSAAPI[Kubernetes State Aggregation API]
+
+        DB[(PostgreSQL)]
+
+        KSAAPI --> |Aggregates state into| DB
+
+        KSAAPI --> |Aggregated API proxy exposed on| Port:8080
+        KSAAPI --> |US1 API proxy exposed on| Port:8081
+        KSAAPI --> |EU1 API proxy exposed on| Port:8082
+        KSAAPI --> |AP1 API proxy exposed on| Port:8083
+    end
+
+    KSAAPI -.-> |Syncs state from| K8s1
+    KSAAPI -.-> |Syncs state from| K8s2
+    KSAAPI -.-> |Syncs state from| K8s3
+
+    %% K8sClient[kubectl get pods --server :8081]
+    %% K8sClient[kubectl get pods --server :8081] --> |Supports native kubectl| Port:8081
