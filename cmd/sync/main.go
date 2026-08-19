@@ -9,7 +9,7 @@ import (
 	"syscall"
 
 	"github.com/migueleliasweb/kubernetes-state-aggregation/pkg/config"
-	"github.com/migueleliasweb/kubernetes-state-aggregation/pkg/db"
+	"github.com/migueleliasweb/kubernetes-state-aggregation/pkg/datastore/postgres"
 	"github.com/migueleliasweb/kubernetes-state-aggregation/pkg/sync"
 	"github.com/spf13/cobra"
 )
@@ -62,7 +62,7 @@ func newRootCmd() *cobra.Command {
 				os.Exit(1)
 			}
 
-			store, err := db.NewStore(dbURL)
+			store, err := postgres.NewSyncer(dbURL)
 			if err != nil {
 				slog.Error(
 					"Failed to connect to database",

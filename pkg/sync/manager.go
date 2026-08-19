@@ -7,7 +7,7 @@ import (
 	"sync"
 
 	"github.com/migueleliasweb/kubernetes-state-aggregation/pkg/config"
-	"github.com/migueleliasweb/kubernetes-state-aggregation/pkg/db"
+	"github.com/migueleliasweb/kubernetes-state-aggregation/pkg/datastore"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
@@ -17,14 +17,14 @@ import (
 // Manager orchestrates multiple ClusterSyncer instances.
 type Manager struct {
 	cfg           *config.Config
-	store         db.Store
+	store         datastore.Syncer
 	targetCluster string
 }
 
 // NewManager creates a new multi-cluster Manager.
 func NewManager(
 	cfg *config.Config,
-	store db.Store,
+	store datastore.Syncer,
 	targetCluster string,
 ) *Manager {
 	return &Manager{

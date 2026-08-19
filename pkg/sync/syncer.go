@@ -6,7 +6,7 @@ import (
 	"log/slog"
 
 	"github.com/migueleliasweb/kubernetes-state-aggregation/pkg/config"
-	"github.com/migueleliasweb/kubernetes-state-aggregation/pkg/db"
+	"github.com/migueleliasweb/kubernetes-state-aggregation/pkg/datastore"
 	"github.com/migueleliasweb/kubernetes-state-aggregation/pkg/k8s"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/client-go/discovery"
@@ -19,7 +19,7 @@ import (
 type ClusterSyncer struct {
 	clusterCfg config.ClusterConfig
 	filters    config.FilterConfig
-	store      db.Store
+	store      datastore.Syncer
 	dynClient  dynamic.Interface
 	discClient discovery.DiscoveryInterface
 }
@@ -28,7 +28,7 @@ type ClusterSyncer struct {
 func NewClusterSyncer(
 	clusterCfg config.ClusterConfig,
 	filters config.FilterConfig,
-	store db.Store,
+	store datastore.Syncer,
 	dynClient dynamic.Interface,
 	discClient discovery.DiscoveryInterface,
 ) *ClusterSyncer {

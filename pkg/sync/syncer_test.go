@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/migueleliasweb/kubernetes-state-aggregation/pkg/config"
-	"github.com/migueleliasweb/kubernetes-state-aggregation/pkg/db"
+	"github.com/migueleliasweb/kubernetes-state-aggregation/pkg/datastore/memory"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -49,7 +49,7 @@ func TestClusterSyncerWithFakeClients(t *testing.T) {
 		},
 	}
 
-	mockStore := db.NewMockStore()
+	mockStore := memory.NewSyncer()
 
 	clusterCfg := config.ClusterConfig{
 		Name: "us1",
