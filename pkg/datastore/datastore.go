@@ -69,19 +69,65 @@ type Syncer interface {
 	Close() error
 }
 
+// WalkAction represents the action to take after visiting a node in the resource graph.
+type WalkAction int
+
+const (
+	// ActionInclude adds the node to the collection and continues traversing its children.
+	ActionInclude WalkAction = iota
+	// ActionExclude does not add the node to the collection, but continues traversing its children.
+	ActionExclude
+	// ActionIncludeAndSkipChildren adds the node to the collection, but stops traversing its children.
+	ActionIncludeAndSkipChildren
+	// ActionExcludeAndSkipChildren does not add the node to the collection, and stops traversing its children.
+	ActionExcludeAndSkipChildren
+	// ActionStop stops the entire traversal immediately.
+	ActionStop
+)
+
+// ResourceCallback is a function called for each node in a resource graph.
+type ResourceCallback func(resourceInfo ResourceRecord) (action WalkAction, err error)
+
+// UniqueResourceCollection stores a collection of resources, ensuring no duplicates.
+type UniqueResourceCollection struct {
+	items []ResourceRecord
+	seen  map[string]struct{}
+}
+
+// NewUniqueResourceCollection creates a new initialized UniqueResourceCollection.
+func NewUniqueResourceCollection() *UniqueResourceCollection {
+	return &UniqueResourceCollection{
+		items: make([]ResourceRecord, 0),
+		seen:  make(map[string]struct{}),
+	}
+}
+
+// Add appends a ResourceRecord to the collection if it hasn't been added yet (deduped by UID).
+// Returns true if the resource was successfully added (was unique).
+func (c *UniqueResourceCollection) Add(r ResourceRecord) bool {
+	if _, exists := c.seen[r.UID]; exists {
+		return false
+	}
+	c.seen[r.UID] = struct{}{}
+	c.items = append(c.items, r)
+	return true
+}
+
+// Items returns the slice of unique resources in the order they were added.
+func (c *UniqueResourceCollection) Items() []ResourceRecord {
+	return c.items
+}
+
 // Fetcher defines operations for querying aggregated Kubernetes state.
 type Fetcher interface {
-	// Queries for a whole resource graph starting from the rootResourceInfo.
+	// QueryResourceGraph queries for a whole resource graph starting from a rootResourceInfo.
 	//
-	// The callback argument can be used both as a processing callback but also
-	// as a filter (simply by ignoring certain resources).
-	//
-	// Returning an error from the callback will stop the traversal.
-	//
-	// Returning done=true will prevent the traversal from going deeper into the resource graph.
+	// The traversal is controlled by the WalkAction returned by the callback, allowing callers to
+	// include/exclude nodes from the returned collection and control whether children are traversed.
+	// Returning an error from the callback will stop the traversal and return the error.
 	QueryResourceGraph(
 		ctx context.Context,
 		rootResourceInfo ResourceInfo,
-		callback func(resourceInfo ResourceRecord) (done bool, err error),
-	) error
+		callback ResourceCallback,
+	) (*UniqueResourceCollection, error)
 }

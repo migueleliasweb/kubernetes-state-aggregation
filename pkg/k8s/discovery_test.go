@@ -46,7 +46,7 @@ func TestDiscoverWatchableResources(t *testing.T) {
 	}
 
 	expectedMap := map[schema.GroupVersionResource]bool{
-		{Group: "", Version: "v1", Resource: "pods"}:              true,
+		{Group: "", Version: "v1", Resource: "pods"}:            true,
 		{Group: "apps", Version: "v1", Resource: "deployments"}: true,
 	}
 

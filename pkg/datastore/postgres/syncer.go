@@ -134,11 +134,7 @@ func (s *PG) UpsertResource(
 func (s *PG) DeleteResource(
 	ctx context.Context,
 	clusterName string,
-	group string,
-	version string,
-	kind string,
-	namespace string,
-	name string,
+	resourceInfo datastore.ResourceInfo,
 ) error {
 	query := `
 	DELETE FROM resources
@@ -153,17 +149,17 @@ func (s *PG) DeleteResource(
 		ctx,
 		query,
 		clusterName,
-		group,
-		version,
-		kind,
-		namespace,
-		name,
+		resourceInfo.Group,
+		resourceInfo.Version,
+		resourceInfo.Kind,
+		resourceInfo.Namespace,
+		resourceInfo.Name,
 	)
 	if err != nil {
 		return fmt.Errorf(
 			"failed to delete resource %s/%s in cluster %s: %w",
-			namespace,
-			name,
+			resourceInfo.Namespace,
+			resourceInfo.Name,
 			clusterName,
 			err,
 		)

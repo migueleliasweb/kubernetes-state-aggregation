@@ -144,11 +144,15 @@ func (cs *ClusterSyncer) Start(ctx context.Context) error {
 				if err := cs.store.DeleteResource(
 					ctx,
 					cs.clusterCfg.Name,
-					gvk.Group,
-					gvk.Version,
-					gvk.Kind,
-					u.GetNamespace(),
-					u.GetName(),
+					datastore.ResourceInfo{
+						Group:           gvk.Group,
+						Version:         gvk.Version,
+						Kind:            gvk.Kind,
+						Namespace:       u.GetNamespace(),
+						Name:            u.GetName(),
+						ResourceVersion: u.GetResourceVersion(),
+						UID:             string(u.GetUID()),
+					},
 				); err != nil {
 					slog.Error(
 						"error deleting resource",

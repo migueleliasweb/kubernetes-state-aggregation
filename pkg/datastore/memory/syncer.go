@@ -65,22 +65,18 @@ func (s *Syncer) UpsertResource(
 func (s *Syncer) DeleteResource(
 	ctx context.Context,
 	clusterName string,
-	group string,
-	version string,
-	kind string,
-	namespace string,
-	name string,
+	resourceInfo datastore.ResourceInfo,
 ) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	key := s.getKey(
 		clusterName,
-		group,
-		version,
-		kind,
-		namespace,
-		name,
+		resourceInfo.Group,
+		resourceInfo.Version,
+		resourceInfo.Kind,
+		resourceInfo.Namespace,
+		resourceInfo.Name,
 	)
 
 	delete(s.resources, key)
