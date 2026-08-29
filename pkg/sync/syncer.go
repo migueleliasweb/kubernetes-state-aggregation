@@ -143,8 +143,8 @@ func (cs *ClusterSyncer) Start(ctx context.Context) error {
 
 				if err := cs.store.DeleteResource(
 					ctx,
-					cs.clusterCfg.Name,
 					datastore.ResourceInfo{
+						ClusterName:     cs.clusterCfg.Name,
 						Group:           gvk.Group,
 						Version:         gvk.Version,
 						Kind:            gvk.Kind,

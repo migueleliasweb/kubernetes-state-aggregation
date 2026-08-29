@@ -48,13 +48,13 @@ func TestMemorySyncerOperations(t *testing.T) {
 
 	if err := syncer.DeleteResource(
 		ctx,
-		"cluster-1",
 		datastore.ResourceInfo{
-			Group:     "",
-			Version:   "v1",
-			Kind:      "Pod",
-			Namespace: "default",
-			Name:      "test-pod",
+			ClusterName: "cluster-1",
+			Group:       "",
+			Version:     "v1",
+			Kind:        "Pod",
+			Namespace:   "default",
+			Name:        "test-pod",
 		},
 	); err != nil {
 		t.Fatalf("failed to delete resource: %v", err)

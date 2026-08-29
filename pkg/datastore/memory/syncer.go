@@ -3,24 +3,15 @@ package memory
 import (
 	"context"
 	"fmt"
-	"sync"
 
 	"github.com/migueleliasweb/kubernetes-state-aggregation/pkg/datastore"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
-var _ datastore.Syncer = (*Syncer)(nil)
-
-// Syncer provides an in-memory implementation of datastore.Syncer for testing and development.
-type Syncer struct {
-	mu        sync.RWMutex
-	resources map[string]*unstructured.Unstructured
-}
-
 // NewSyncer initializes an empty in-memory Syncer.
 func NewSyncer() *Syncer {
 	return &Syncer{
-		resources: make(map[string]*unstructured.Unstructured),
+		resources: map[string]*unstructured.Unstructured{},
 	}
 }
 
@@ -64,14 +55,13 @@ func (s *Syncer) UpsertResource(
 
 func (s *Syncer) DeleteResource(
 	ctx context.Context,
-	clusterName string,
 	resourceInfo datastore.ResourceInfo,
 ) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	key := s.getKey(
-		clusterName,
+		resourceInfo.ClusterName,
 		resourceInfo.Group,
 		resourceInfo.Version,
 		resourceInfo.Kind,

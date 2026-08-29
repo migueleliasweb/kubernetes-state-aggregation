@@ -58,7 +58,7 @@ func (c *Config) Validate() error {
 	if len(c.Clusters) == 0 {
 		return fmt.Errorf("at least one cluster must be configured")
 	}
-	names := make(map[string]bool)
+	names := map[string]bool{}
 	for i, cluster := range c.Clusters {
 		if strings.TrimSpace(cluster.Name) == "" {
 			return fmt.Errorf("cluster at index %d missing name", i)

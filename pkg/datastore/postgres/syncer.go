@@ -11,13 +11,6 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
-var _ datastore.Syncer = (*PG)(nil)
-
-// PG implements datastore.PG backed by PostgreSQL.
-type PG struct {
-	db *sql.DB
-}
-
 // NewPGSyncer connects to PostgreSQL using the provided connection string.
 func NewPGSyncer(dbURL string) (*PG, error) {
 	db, err := sql.Open("postgres", dbURL)
@@ -76,7 +69,7 @@ func (s *PG) UpsertResource(
 	gvk := u.GroupVersionKind()
 	labels := u.GetLabels()
 	if labels == nil {
-		labels = make(map[string]string)
+		labels = map[string]string{}
 	}
 
 	labelsJSON, err := json.Marshal(labels)
@@ -133,7 +126,6 @@ func (s *PG) UpsertResource(
 // DeleteResource removes a resource from the datastore.
 func (s *PG) DeleteResource(
 	ctx context.Context,
-	clusterName string,
 	resourceInfo datastore.ResourceInfo,
 ) error {
 	query := `
@@ -148,7 +140,7 @@ func (s *PG) DeleteResource(
 	_, err := s.db.ExecContext(
 		ctx,
 		query,
-		clusterName,
+		resourceInfo.ClusterName,
 		resourceInfo.Group,
 		resourceInfo.Version,
 		resourceInfo.Kind,
@@ -160,7 +152,7 @@ func (s *PG) DeleteResource(
 			"failed to delete resource %s/%s in cluster %s: %w",
 			resourceInfo.Namespace,
 			resourceInfo.Name,
-			clusterName,
+			resourceInfo.ClusterName,
 			err,
 		)
 	}

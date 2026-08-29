@@ -53,3 +53,32 @@ slog.Error(
 ## Coding legibility
 
 Ensure the code is legible. Add newlines before and after control structures and definitions to improve code readability and maintainability.
+
+## Variables / Properties initialization
+
+Always use inline literal initialization instead of `make()` as much as possible for slices and maps, unless a specific capacity is required for performance.
+
+```go
+// Harder to read
+seen := make(map[string]bool)
+
+// Better
+seen := map[string]bool{}
+```
+
+## Sets / Seen Maps
+
+When creating sets or "seen" maps, prefer using `map[T]bool` instead of `map[T]struct{}{}`. In modern Go, this is perfectly fine for performance and greatly improves code readability during checks (`if seen[key]` instead of `if _, exists := seen[key]; exists`).
+
+## Interfaces
+
+When defining a new Type and implementing it on a concrete type, always add a build-time interface check near the type definition. Ensure it is preceded by a comment.
+
+```go
+// Build-time interface check.
+var _ datastore.Syncer = &PG{}
+```
+
+## Formatting
+
+Always run `go fmt ./...` before wrapping up a plan's execution or concluding a coding task to ensure all Go files are properly formatted.

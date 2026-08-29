@@ -28,6 +28,7 @@ type ResourceRecord struct {
 // GetResourceInfo Derives a ResourceInfo from a given ResourceRecord
 func (rr *ResourceRecord) GetResourceInfo() ResourceInfo {
 	return ResourceInfo{
+		ClusterName:     rr.ClusterName,
 		Group:           rr.GroupName,
 		Kind:            rr.Kind,
 		Name:            rr.Name,
@@ -41,6 +42,7 @@ func (rr *ResourceRecord) GetResourceInfo() ResourceInfo {
 // ResourceInfo Defines the base information to determine the
 // uniqueness of a given resource in KSA.
 type ResourceInfo struct {
+	ClusterName     string `json:"clusterName,omitzero"`
 	Group           string `json:"group,omitzero"`
 	Kind            string `json:"kind,omitzero"`
 	Name            string `json:"name,omitzero"`
@@ -62,7 +64,6 @@ type Syncer interface {
 
 	DeleteResource(
 		ctx context.Context,
-		clusterName string,
 		resourceInfo ResourceInfo,
 	) error
 
@@ -70,19 +71,19 @@ type Syncer interface {
 }
 
 // WalkAction represents the action to take after visiting a node in the resource graph.
-type WalkAction int
+type WalkAction string
 
 const (
 	// ActionInclude adds the node to the collection and continues traversing its children.
-	ActionInclude WalkAction = iota
+	ActionInclude WalkAction = "Include"
 	// ActionExclude does not add the node to the collection, but continues traversing its children.
-	ActionExclude
+	ActionExclude WalkAction = "Exclude"
 	// ActionIncludeAndSkipChildren adds the node to the collection, but stops traversing its children.
-	ActionIncludeAndSkipChildren
+	ActionIncludeAndSkipChildren WalkAction = "IncludeAndSkipChildren"
 	// ActionExcludeAndSkipChildren does not add the node to the collection, and stops traversing its children.
-	ActionExcludeAndSkipChildren
+	ActionExcludeAndSkipChildren WalkAction = "ExcludeAndSkipChildren"
 	// ActionStop stops the entire traversal immediately.
-	ActionStop
+	ActionStop WalkAction = "Stop"
 )
 
 // ResourceCallback is a function called for each node in a resource graph.
@@ -91,24 +92,29 @@ type ResourceCallback func(resourceInfo ResourceRecord) (action WalkAction, err 
 // UniqueResourceCollection stores a collection of resources, ensuring no duplicates.
 type UniqueResourceCollection struct {
 	items []ResourceRecord
-	seen  map[string]struct{}
+	seen  map[string]bool
 }
 
 // NewUniqueResourceCollection creates a new initialized UniqueResourceCollection.
 func NewUniqueResourceCollection() *UniqueResourceCollection {
 	return &UniqueResourceCollection{
-		items: make([]ResourceRecord, 0),
-		seen:  make(map[string]struct{}),
+		items: []ResourceRecord{},
+		seen:  map[string]bool{},
 	}
+}
+
+func getResourceKey(clusterName, uid string) string {
+	return clusterName + "/" + uid
 }
 
 // Add appends a ResourceRecord to the collection if it hasn't been added yet (deduped by UID).
 // Returns true if the resource was successfully added (was unique).
 func (c *UniqueResourceCollection) Add(r ResourceRecord) bool {
-	if _, exists := c.seen[r.UID]; exists {
+	key := getResourceKey(r.ClusterName, r.UID)
+	if c.seen[key] {
 		return false
 	}
-	c.seen[r.UID] = struct{}{}
+	c.seen[key] = true
 	c.items = append(c.items, r)
 	return true
 }
@@ -120,12 +126,12 @@ func (c *UniqueResourceCollection) Items() []ResourceRecord {
 
 // Fetcher defines operations for querying aggregated Kubernetes state.
 type Fetcher interface {
-	// QueryResourceGraph queries for a whole resource graph starting from a rootResourceInfo.
+	// FetchResourceGraph queries for a whole resource graph starting from a rootResourceInfo.
 	//
 	// The traversal is controlled by the WalkAction returned by the callback, allowing callers to
 	// include/exclude nodes from the returned collection and control whether children are traversed.
 	// Returning an error from the callback will stop the traversal and return the error.
-	QueryResourceGraph(
+	FetchResourceGraph(
 		ctx context.Context,
 		rootResourceInfo ResourceInfo,
 		callback ResourceCallback,
