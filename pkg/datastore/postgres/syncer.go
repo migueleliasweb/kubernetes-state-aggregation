@@ -11,15 +11,15 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
-var _ datastore.Syncer = (*Syncer)(nil)
+var _ datastore.Syncer = (*PG)(nil)
 
-// Syncer implements datastore.Syncer backed by PostgreSQL.
-type Syncer struct {
+// PG implements datastore.PG backed by PostgreSQL.
+type PG struct {
 	db *sql.DB
 }
 
-// NewSyncer connects to PostgreSQL using the provided connection string.
-func NewSyncer(dbURL string) (*Syncer, error) {
+// NewPGSyncer connects to PostgreSQL using the provided connection string.
+func NewPGSyncer(dbURL string) (*PG, error) {
 	db, err := sql.Open("postgres", dbURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database connection: %w", err)
@@ -30,16 +30,16 @@ func NewSyncer(dbURL string) (*Syncer, error) {
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 
-	return &Syncer{db: db}, nil
+	return &PG{db: db}, nil
 }
 
 // NewSyncerWithDB creates a Syncer wrapping an existing *sql.DB (useful for testing).
-func NewSyncerWithDB(db *sql.DB) *Syncer {
-	return &Syncer{db: db}
+func NewSyncerWithDB(db *sql.DB) *PG {
+	return &PG{db: db}
 }
 
 // InitSchema creates the resources table and associated GIN indexes if they do not exist.
-func (s *Syncer) InitSchema(ctx context.Context) error {
+func (s *PG) InitSchema(ctx context.Context) error {
 	query := `
 	CREATE TABLE IF NOT EXISTS resources (
 		cluster_name     VARCHAR(255) NOT NULL,
@@ -68,7 +68,7 @@ func (s *Syncer) InitSchema(ctx context.Context) error {
 }
 
 // UpsertResource inserts or updates a resource manifest in the datastore.
-func (s *Syncer) UpsertResource(
+func (s *PG) UpsertResource(
 	ctx context.Context,
 	clusterName string,
 	u *unstructured.Unstructured,
@@ -131,7 +131,7 @@ func (s *Syncer) UpsertResource(
 }
 
 // DeleteResource removes a resource from the datastore.
-func (s *Syncer) DeleteResource(
+func (s *PG) DeleteResource(
 	ctx context.Context,
 	clusterName string,
 	group string,
@@ -173,6 +173,6 @@ func (s *Syncer) DeleteResource(
 }
 
 // Close closes the database connection pool.
-func (s *Syncer) Close() error {
+func (s *PG) Close() error {
 	return s.db.Close()
 }

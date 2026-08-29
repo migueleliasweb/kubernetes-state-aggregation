@@ -62,7 +62,7 @@ func newRootCmd() *cobra.Command {
 				os.Exit(1)
 			}
 
-			store, err := postgres.NewSyncer(dbURL)
+			store, err := postgres.NewPGSyncer(dbURL)
 			if err != nil {
 				slog.Error(
 					"Failed to connect to database",

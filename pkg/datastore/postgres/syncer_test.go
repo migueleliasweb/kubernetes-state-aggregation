@@ -5,7 +5,7 @@ import (
 )
 
 func TestSyncerTypeImplementsDatastoreSyncer(t *testing.T) {
-	var syncer *Syncer
+	var syncer *PG
 	if syncer != nil {
 		t.Errorf("expected nil syncer instance for type test")
 	}
