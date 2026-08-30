@@ -66,6 +66,8 @@ seen := make(map[string]bool)
 seen := map[string]bool{}
 ```
 
+Prefer using `any` instead of `interface{}` whenever possible for better readability.
+
 ## Sets / Seen Maps
 
 When creating sets or "seen" maps, prefer using `map[T]bool` instead of `map[T]struct{}{}`. In modern Go, this is perfectly fine for performance and greatly improves code readability during checks (`if seen[key]` instead of `if _, exists := seen[key]; exists`).

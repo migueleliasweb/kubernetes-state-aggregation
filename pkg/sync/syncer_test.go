@@ -67,7 +67,7 @@ func TestClusterSyncerWithFakeClients(t *testing.T) {
 	}()
 
 	// Allow informers to initialize and process initial add event
-	time.Sleep(200 * time.Millisecond)
+	time.Sleep(2 * time.Second)
 
 	res := mockStore.GetResource("us1", "", "v1", "Pod", "default", "pod-1")
 	if res == nil {

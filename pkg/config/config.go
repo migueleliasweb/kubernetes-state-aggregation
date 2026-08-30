@@ -11,11 +11,12 @@ import (
 
 // FilterConfig holds namespace, resource, and label selection rules.
 type FilterConfig struct {
-	IncludeNamespaces []string `yaml:"include_namespaces" json:"include_namespaces"`
-	ExcludeNamespaces []string `yaml:"exclude_namespaces" json:"exclude_namespaces"`
-	IncludeResources  []string `yaml:"include_resources" json:"include_resources"`
-	ExcludeResources  []string `yaml:"exclude_resources" json:"exclude_resources"`
-	LabelSelector     string   `yaml:"label_selector" json:"label_selector"`
+	IncludeNamespaces    []string `yaml:"include_namespaces" json:"include_namespaces"`
+	ExcludeNamespaces    []string `yaml:"exclude_namespaces" json:"exclude_namespaces"`
+	IncludeResources     []string `yaml:"include_resources" json:"include_resources"`
+	ExcludeResources     []string `yaml:"exclude_resources" json:"exclude_resources"`
+	LabelSelector        string   `yaml:"label_selector" json:"label_selector"`
+	IncludeClusterScoped bool     `yaml:"include_cluster_scoped" json:"include_cluster_scoped"`
 }
 
 // ClusterConfig defines connection details and filters for a single remote cluster.
@@ -91,6 +92,16 @@ func (c *Config) GetEffectiveFilters(clusterName string) FilterConfig {
 			if cl.Filters.LabelSelector != "" {
 				eff.LabelSelector = cl.Filters.LabelSelector
 			}
+
+			// We OR the boolean flag so if either global or cluster specifies true, it's true.
+			// Or we could just override it if we had a pointer, but for a boolean, OR is usually desired
+			// if true is the opt-in behavior. Actually, just overriding it if set is hard without a pointer.
+			// Let's OR it, so setting it to true at global level applies to all, and setting it at cluster level
+			// applies to that cluster.
+			if cl.Filters.IncludeClusterScoped {
+				eff.IncludeClusterScoped = true
+			}
+
 			return eff
 		}
 	}
@@ -99,6 +110,11 @@ func (c *Config) GetEffectiveFilters(clusterName string) FilterConfig {
 
 // MatchesNamespace checks if a namespace matches the include/exclude filter rules.
 func (f *FilterConfig) MatchesNamespace(ns string) bool {
+	// If the resource is cluster-scoped (empty namespace) and the flag is true, include it.
+	if ns == "" && f.IncludeClusterScoped {
+		return true
+	}
+
 	if len(f.ExcludeNamespaces) > 0 {
 		for _, pattern := range f.ExcludeNamespaces {
 			if matchPattern(pattern, ns) {

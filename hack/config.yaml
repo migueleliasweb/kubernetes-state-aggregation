@@ -1,0 +1,13 @@
+global_filters:
+  include_namespaces:
+    - "default"
+  exclude_resources:
+    - "events"
+
+clusters:
+  - name: local
+    # For a local kind/minikube cluster, the api_server url is usually what's in your ~/.kube/config
+    # KSA can just use the current context if context is empty, or you can specify it
+    kubeconfig: "~/.kube/config"
+    context: "" # Leave empty to use the current context
+    disabled: false

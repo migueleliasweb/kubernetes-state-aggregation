@@ -92,6 +92,7 @@ func (cs *ClusterSyncer) Start(ctx context.Context) error {
 				},
 			}
 
+
 			// 3. We wrap the DirectStore in a namespace-filtering EventHandler
 			handler := cache.ResourceEventHandlerFuncs{
 				AddFunc: func(obj interface{}) {
@@ -123,20 +124,16 @@ func (cs *ClusterSyncer) Start(ctx context.Context) error {
 			// the FIFO to generate Deleted deltas for items that are in the directStore but missing
 			// from the initial list.
 			fifo := cache.NewDeltaFIFOWithOptions(cache.DeltaFIFOOptions{
-				KeyFunction:  cache.MetaNamespaceKeyFunc,
+				KeyFunction:  cache.DeletionHandlingMetaNamespaceKeyFunc,
 				KnownObjects: directStore,
 			})
 
 			cfg := &cache.Config{
 				Queue:            fifo,
 				ListerWatcher:    lw,
-				ObjectType:       &unstructured.Unstructured{},
+				ObjectType:       nil,
 				FullResyncPeriod: 0,
 				Process: func(obj interface{}, isInInitialList bool) error {
-					// We pass the deltas to the default processDeltas-like handling.
-					// Actually, cache.ProcessDeltas is available, but wait, it expects a cache.Store
-					// and updates it BEFORE calling handlers. Since our handler DOES the update,
-					// we just want to call the handler.
 					for _, d := range obj.(cache.Deltas) {
 						switch d.Type {
 						case cache.Sync, cache.Replaced, cache.Added, cache.Updated:
@@ -159,10 +156,10 @@ func (cs *ClusterSyncer) Start(ctx context.Context) error {
 			}
 
 			controller := cache.New(cfg)
-
+			
 			// Start the controller
 			controller.Run(ctx.Done())
-
+			
 		}(gvr)
 	}
 
