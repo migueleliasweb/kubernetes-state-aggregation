@@ -131,7 +131,7 @@ func (cs *ClusterSyncer) Start(ctx context.Context) error {
 			cfg := &cache.Config{
 				Queue:            fifo,
 				ListerWatcher:    lw,
-				ObjectType:       nil,
+				ObjectType:       &unstructured.Unstructured{},
 				FullResyncPeriod: 0,
 				Process: func(obj interface{}, isInInitialList bool) error {
 					for _, d := range obj.(cache.Deltas) {

@@ -1,6 +1,7 @@
 global_filters:
   include_namespaces:
     - "default"
+  include_cluster_scoped: true
   exclude_resources:
     - "events"
 
