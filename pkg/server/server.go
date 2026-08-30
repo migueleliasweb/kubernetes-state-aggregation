@@ -6,24 +6,29 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"net/http"
+	"time"
 
+	"connectrpc.com/connect"
+	"connectrpc.com/grpcreflect"
 	v1 "github.com/migueleliasweb/kubernetes-state-aggregation/pkg/api/v1"
+	"github.com/migueleliasweb/kubernetes-state-aggregation/pkg/api/v1/v1connect"
 	"github.com/migueleliasweb/kubernetes-state-aggregation/pkg/datastore"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
+	"github.com/rs/cors"
+	"golang.org/x/net/http2"
+	"golang.org/x/net/http2/h2c"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-// StateServer implements the gRPC StateService.
+// StateServer implements the Connect and gRPC StateService.
 type StateServer struct {
-	v1.UnimplementedStateServiceServer
+	v1connect.UnimplementedStateServiceHandler
 
 	fetcher datastore.Fetcher
 }
 
 // Build-time interface check.
-var _ v1.StateServiceServer = &StateServer{}
+var _ v1connect.StateServiceHandler = &StateServer{}
 
 // NewStateServer creates a new StateServer instance.
 func NewStateServer(fetcher datastore.Fetcher) *StateServer {
@@ -74,17 +79,23 @@ func fromProtoResourceInfo(info *v1.ResourceInfo) datastore.ResourceInfo {
 // GetResource queries for a single resource.
 func (s *StateServer) GetResource(
 	ctx context.Context,
-	req *v1.GetResourceRequest,
-) (*v1.GetResourceResponse, error) {
-	if req == nil || req.Info == nil {
-		return nil, status.Error(codes.InvalidArgument, "resource info is required")
+	req *connect.Request[v1.GetResourceRequest],
+) (*connect.Response[v1.GetResourceResponse], error) {
+	if req == nil || req.Msg == nil || req.Msg.Info == nil {
+		return nil, connect.NewError(
+			connect.CodeInvalidArgument,
+			errors.New("resource info is required"),
+		)
 	}
 
-	info := fromProtoResourceInfo(req.Info)
+	info := fromProtoResourceInfo(req.Msg.Info)
 	record, err := s.fetcher.GetResource(ctx, info)
 	if err != nil {
 		if errors.Is(err, datastore.ErrNotFound) {
-			return nil, status.Errorf(codes.NotFound, "resource not found")
+			return nil, connect.NewError(
+				connect.CodeNotFound,
+				errors.New("resource not found"),
+			)
 		}
 
 		slog.Error(
@@ -96,22 +107,25 @@ func (s *StateServer) GetResource(
 			"err", err,
 		)
 
-		return nil, status.Errorf(codes.Internal, "failed to get resource: %v", err)
+		return nil, connect.NewError(
+			connect.CodeInternal,
+			fmt.Errorf("failed to get resource: %w", err),
+		)
 	}
 
-	return &v1.GetResourceResponse{
+	return connect.NewResponse(&v1.GetResourceResponse{
 		Record: toProtoResourceRecord(*record),
-	}, nil
+	}), nil
 }
 
 // ListResources queries for multiple resources matching filter.
 func (s *StateServer) ListResources(
 	ctx context.Context,
-	req *v1.ListResourcesRequest,
-) (*v1.ListResourcesResponse, error) {
+	req *connect.Request[v1.ListResourcesRequest],
+) (*connect.Response[v1.ListResourcesResponse], error) {
 	var filter datastore.ResourceInfo
-	if req != nil && req.Filter != nil {
-		filter = fromProtoResourceInfo(req.Filter)
+	if req != nil && req.Msg != nil && req.Msg.Filter != nil {
+		filter = fromProtoResourceInfo(req.Msg.Filter)
 	}
 
 	records, err := s.fetcher.ListResources(ctx, filter)
@@ -125,7 +139,10 @@ func (s *StateServer) ListResources(
 			"err", err,
 		)
 
-		return nil, status.Errorf(codes.Internal, "failed to list resources: %v", err)
+		return nil, connect.NewError(
+			connect.CodeInternal,
+			fmt.Errorf("failed to list resources: %w", err),
+		)
 	}
 
 	protoItems := []*v1.ResourceRecord{}
@@ -133,21 +150,24 @@ func (s *StateServer) ListResources(
 		protoItems = append(protoItems, toProtoResourceRecord(rec))
 	}
 
-	return &v1.ListResourcesResponse{
+	return connect.NewResponse(&v1.ListResourcesResponse{
 		Items: protoItems,
-	}, nil
+	}), nil
 }
 
 // FetchResourceGraph queries the underlying datastore for the resource graph and returns records.
 func (s *StateServer) FetchResourceGraph(
 	ctx context.Context,
-	req *v1.FetchResourceGraphRequest,
-) (*v1.FetchResourceGraphResponse, error) {
-	if req == nil || req.Root == nil {
-		return nil, status.Error(codes.InvalidArgument, "root resource info is required")
+	req *connect.Request[v1.FetchResourceGraphRequest],
+) (*connect.Response[v1.FetchResourceGraphResponse], error) {
+	if req == nil || req.Msg == nil || req.Msg.Root == nil {
+		return nil, connect.NewError(
+			connect.CodeInvalidArgument,
+			errors.New("root resource info is required"),
+		)
 	}
 
-	rootInfo := fromProtoResourceInfo(req.Root)
+	rootInfo := fromProtoResourceInfo(req.Msg.Root)
 
 	collection, err := s.fetcher.FetchResourceGraph(
 		ctx,
@@ -166,7 +186,10 @@ func (s *StateServer) FetchResourceGraph(
 			"err", err,
 		)
 
-		return nil, fmt.Errorf("failed to fetch resource graph: %w", err)
+		return nil, connect.NewError(
+			connect.CodeInternal,
+			fmt.Errorf("failed to fetch resource graph: %w", err),
+		)
 	}
 
 	items := collection.Items()
@@ -176,44 +199,102 @@ func (s *StateServer) FetchResourceGraph(
 		protoItems = append(protoItems, toProtoResourceRecord(item))
 	}
 
-	return &v1.FetchResourceGraphResponse{
+	return connect.NewResponse(&v1.FetchResourceGraphResponse{
 		Items: protoItems,
-	}, nil
+	}), nil
 }
 
-// Server wraps the gRPC server and network listener.
+// Option configures a Server.
+type Option func(*Server)
+
+// WithAllowedOrigins sets the CORS allowed origins.
+func WithAllowedOrigins(origins []string) Option {
+	return func(s *Server) {
+		if len(origins) > 0 {
+			s.allowedOrigins = origins
+		}
+	}
+}
+
+// Server wraps the Connect-Go / gRPC HTTP server and network listener.
 type Server struct {
-	grpcServer *grpc.Server
-	listener   net.Listener
+	httpServer     *http.Server
+	listener       net.Listener
+	allowedOrigins []string
 }
 
 // NewServer creates a new Server bound to the given listener.
 func NewServer(
 	fetcher datastore.Fetcher,
 	listener net.Listener,
+	opts ...Option,
 ) *Server {
-	grpcServer := grpc.NewServer()
+	s := &Server{
+		listener: listener,
+		allowedOrigins: []string{
+			"*",
+		},
+	}
+
+	for _, opt := range opts {
+		opt(s)
+	}
+
+	mux := http.NewServeMux()
 	stateServer := NewStateServer(fetcher)
 
-	v1.RegisterStateServiceServer(grpcServer, stateServer)
+	path, handler := v1connect.NewStateServiceHandler(stateServer)
+	mux.Handle(path, handler)
 
-	return &Server{
-		grpcServer: grpcServer,
-		listener:   listener,
+	reflector := grpcreflect.NewStaticReflector(
+		v1connect.StateServiceName,
+	)
+	mux.Handle(grpcreflect.NewHandlerV1(reflector))
+	mux.Handle(grpcreflect.NewHandlerV1Alpha(reflector))
+
+	corsHandler := cors.New(cors.Options{
+		AllowedOrigins: s.allowedOrigins,
+		AllowedMethods: []string{
+			http.MethodGet,
+			http.MethodPost,
+			http.MethodOptions,
+		},
+		AllowedHeaders: []string{
+			"*",
+		},
+		ExposedHeaders: []string{
+			"Grpc-Status",
+			"Grpc-Message",
+			"Grpc-Status-Details-Bin",
+			"Connect-Protocol-Version",
+			"Connect-Timeout-Ms",
+		},
+		AllowCredentials: true,
+	}).Handler(mux)
+
+	h2cHandler := h2c.NewHandler(corsHandler, &http2.Server{})
+
+	s.httpServer = &http.Server{
+		Handler: h2cHandler,
 	}
+
+	return s
 }
 
-// Serve starts the gRPC server.
+// Serve starts the HTTP / gRPC server.
 func (s *Server) Serve() error {
-	return s.grpcServer.Serve(s.listener)
+	return s.httpServer.Serve(s.listener)
 }
 
-// GracefulStop gracefully stops the gRPC server.
+// GracefulStop gracefully stops the server.
 func (s *Server) GracefulStop() {
-	s.grpcServer.GracefulStop()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	_ = s.httpServer.Shutdown(ctx)
 }
 
-// Stop immediately stops the gRPC server.
+// Stop immediately stops the server.
 func (s *Server) Stop() {
-	s.grpcServer.Stop()
+	_ = s.httpServer.Close()
 }

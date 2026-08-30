@@ -1,0 +1,30 @@
+{
+  "name": "@migueleliasweb/ksa-client",
+  "version": "0.1.0",
+  "description": "TypeScript / JavaScript Connect & gRPC client for Kubernetes State Aggregation (KSA)",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@bufbuild/protobuf": "^2.2.3",
+    "@connectrpc/connect": "^2.0.1",
+    "@connectrpc/connect-web": "^2.0.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  }
+}

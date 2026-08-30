@@ -4,14 +4,14 @@ set -euo pipefail
 # Change to the root of the project
 cd "$(dirname "$0")/.."
 
-mkdir -p pkg/api/v1
+export PATH="$PATH:$HOME/go/bin"
 
-protoc \
-  --proto_path=proto/v1 \
-  --go_out=pkg/api/v1 \
-  --go_opt=paths=source_relative \
-  --go-grpc_out=pkg/api/v1 \
-  --go-grpc_opt=paths=source_relative \
-  proto/v1/state.proto
+if ! command -v buf &> /dev/null; then
+    echo "buf could not be found, installing..."
+    go install github.com/bufbuild/buf/cmd/buf@latest
+fi
 
-echo "Protobuf Go code generated successfully in pkg/api/v1"
+echo "Running buf generate..."
+buf generate
+
+echo "Protobuf Go and TypeScript code generated successfully"

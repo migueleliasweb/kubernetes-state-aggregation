@@ -35,3 +35,6 @@ go.work.sum
 
 # Hack config
 /hack/config.yaml
+
+# Node / TS client
+clients/ts/node_modules/

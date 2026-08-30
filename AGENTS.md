@@ -84,3 +84,7 @@ var _ datastore.Syncer = &PG{}
 ## Formatting
 
 Always run `go fmt ./...` before wrapping up a plan's execution or concluding a coding task to ensure all Go files are properly formatted.
+
+## Shell & Bash Scripts
+
+When writing or modifying bash/shell scripts (`.sh` files), always use **4-space indentation** for nested blocks, control statements (`if`, `for`, `while`, `case`), and functions.

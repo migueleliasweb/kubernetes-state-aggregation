@@ -3,10 +3,13 @@ package server
 import (
 	"context"
 	"net"
+	"net/http"
 	"testing"
 	"time"
 
+	"connectrpc.com/connect"
 	v1 "github.com/migueleliasweb/kubernetes-state-aggregation/pkg/api/v1"
+	"github.com/migueleliasweb/kubernetes-state-aggregation/pkg/api/v1/v1connect"
 	"github.com/migueleliasweb/kubernetes-state-aggregation/pkg/datastore"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -248,5 +251,76 @@ func TestStateServer_GetAndListResources(t *testing.T) {
 	}
 	if len(listRes.Items) != 2 {
 		t.Fatalf("expected 2 items, got %d", len(listRes.Items))
+	}
+}
+
+func TestStateServer_ConnectClient(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Second)
+
+	fetcher := &mockFetcher{
+		records: []datastore.ResourceRecord{
+			{
+				ClusterName:     "c1",
+				GroupName:       "apps",
+				Kind:            "Deployment",
+				Manifest:        []byte(`{"apiVersion":"apps/v1","metadata":{"name":"web"}}`),
+				Name:            "web",
+				Namespace:       "default",
+				ResourceVersion: "123",
+				UID:             "uid-1",
+				UpdatedAt:       now,
+				Version:         "v1",
+			},
+		},
+	}
+
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to listen: %v", err)
+	}
+
+	srv := NewServer(fetcher, lis)
+	go func() {
+		_ = srv.Serve()
+	}()
+	defer srv.GracefulStop()
+
+	client := v1connect.NewStateServiceClient(
+		&http.Client{},
+		"http://"+lis.Addr().String(),
+	)
+
+	// Test GetResource via Connect
+	res, err := client.GetResource(
+		context.Background(),
+		connect.NewRequest(&v1.GetResourceRequest{
+			Info: &v1.ResourceInfo{
+				ClusterName: "c1",
+				Kind:        "Deployment",
+				Name:        "web",
+				Namespace:   "default",
+			},
+		}),
+	)
+	if err != nil {
+		t.Fatalf("Connect GetResource failed: %v", err)
+	}
+	if res.Msg.Record.Uid != "uid-1" {
+		t.Errorf("expected UID 'uid-1', got %q", res.Msg.Record.Uid)
+	}
+
+	// Test NotFound via Connect
+	_, err = client.GetResource(
+		context.Background(),
+		connect.NewRequest(&v1.GetResourceRequest{
+			Info: &v1.ResourceInfo{
+				ClusterName: "c99",
+				Kind:        "Deployment",
+				Name:        "missing",
+			},
+		}),
+	)
+	if connect.CodeOf(err) != connect.CodeNotFound {
+		t.Errorf("expected CodeNotFound, got %v", connect.CodeOf(err))
 	}
 }

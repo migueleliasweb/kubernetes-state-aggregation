@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"sync"
@@ -19,13 +20,14 @@ import (
 )
 
 var (
-	configPath    string
-	clusterFilter string
-	dbURL         string
-	logLevel      string
-	listenAddr    string
-	enableSync    bool
-	enableAPI     bool
+	configPath         string
+	clusterFilter      string
+	dbURL              string
+	logLevel           string
+	listenAddr         string
+	enableSync         bool
+	enableAPI          bool
+	corsAllowedOrigins []string
 )
 
 func newRootCmd() *cobra.Command {
@@ -104,33 +106,37 @@ func newRootCmd() *cobra.Command {
 					return err
 				}
 
-				srv := ksaServer.NewServer(store, lis)
+				srv := ksaServer.NewServer(
+					store,
+					lis,
+					ksaServer.WithAllowedOrigins(corsAllowedOrigins),
+				)
 
 				wg.Add(1)
 				go func() {
 					defer wg.Done()
 
 					slog.Info(
-						"gRPC API server listening",
+						"gRPC & Connect API server listening",
 						"addr", listenAddr,
 					)
 
-					if err := srv.Serve(); err != nil && !errors.Is(err, net.ErrClosed) {
+					if err := srv.Serve(); err != nil && !errors.Is(err, net.ErrClosed) && !errors.Is(err, http.ErrServerClosed) {
 						slog.Error(
-							"gRPC API server encountered error",
+							"API server encountered error",
 							"err", err,
 						)
 					}
 				}()
 
-				// Handle graceful shutdown for gRPC API Server
+				// Handle graceful shutdown for API Server
 				wg.Add(1)
 				go func() {
 					defer wg.Done()
 
 					<-ctx.Done()
 
-					slog.Info("Stopping gRPC API server gracefully...")
+					slog.Info("Stopping API server gracefully...")
 
 					srv.GracefulStop()
 				}()
@@ -220,6 +226,12 @@ func newRootCmd() *cobra.Command {
 		"listen-addr",
 		":50051",
 		"gRPC API server listen address",
+	)
+	cmd.Flags().StringSliceVar(
+		&corsAllowedOrigins,
+		"cors-allowed-origins",
+		[]string{"*"},
+		"Allowed CORS origins for Connect/gRPC-Web web requests",
 	)
 	cmd.Flags().BoolVar(
 		&enableSync,
