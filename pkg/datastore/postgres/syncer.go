@@ -169,7 +169,7 @@ func (s *PG) ListResourceKeys(
 	kind string,
 ) ([]datastore.ResourceInfo, error) {
 	query := `
-	SELECT namespace, name, uid, resource_version
+	SELECT namespace, name, uid, resource_version, kind
 	FROM resources
 	WHERE cluster_name = $1
 	  AND group_name = $2
@@ -201,6 +201,7 @@ func (s *PG) ListResourceKeys(
 			&info.Name,
 			&info.UID,
 			&info.ResourceVersion,
+			&info.Kind,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan resource key row: %w", err)
 		}

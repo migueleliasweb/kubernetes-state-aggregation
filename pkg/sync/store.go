@@ -24,7 +24,7 @@ type DirectStore struct {
 	db          datastore.Syncer
 
 	mu   sync.RWMutex
-	keys map[string]struct{}
+	keys map[string]datastore.ResourceInfo
 }
 
 // NewDirectStore creates a new DirectStore and initializes its in-memory key map
@@ -38,7 +38,7 @@ func NewDirectStore(
 		clusterName: clusterName,
 		gvr:         gvr,
 		db:          db,
-		keys:        make(map[string]struct{}),
+		keys:        make(map[string]datastore.ResourceInfo),
 	}
 }
 
@@ -53,12 +53,11 @@ func (s *DirectStore) InitializeKeys(ctx context.Context, kind string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, k := range keys {
-		// Use client-go MetaNamespaceKeyFunc format: namespace/name or just name
 		key := k.Name
 		if k.Namespace != "" {
 			key = k.Namespace + "/" + k.Name
 		}
-		s.keys[key] = struct{}{}
+		s.keys[key] = k
 	}
 	return nil
 }
@@ -79,8 +78,18 @@ func (s *DirectStore) Update(obj interface{}) error {
 
 	key, err := cache.MetaNamespaceKeyFunc(obj)
 	if err == nil {
+		gvk := u.GroupVersionKind()
 		s.mu.Lock()
-		s.keys[key] = struct{}{}
+		s.keys[key] = datastore.ResourceInfo{
+			ClusterName:     s.clusterName,
+			Group:           gvk.Group,
+			Version:         gvk.Version,
+			Kind:            gvk.Kind,
+			Namespace:       u.GetNamespace(),
+			Name:            u.GetName(),
+			ResourceVersion: u.GetResourceVersion(),
+			UID:             string(u.GetUID()),
+		}
 		s.mu.Unlock()
 	}
 
@@ -100,7 +109,22 @@ func (s *DirectStore) Delete(obj interface{}) error {
 
 		u, ok = tombstone.Obj.(*unstructured.Unstructured)
 		if !ok {
-			return fmt.Errorf("tombstone contained unknown object %T", tombstone.Obj)
+			info, ok := tombstone.Obj.(datastore.ResourceInfo)
+			if !ok {
+				return fmt.Errorf("tombstone contained unknown object %T", tombstone.Obj)
+			}
+
+			if err := s.db.DeleteResource(context.Background(), info); err != nil {
+				return err
+			}
+
+			key, err := cache.MetaNamespaceKeyFunc(obj)
+			if err == nil {
+				s.mu.Lock()
+				delete(s.keys, key)
+				s.mu.Unlock()
+			}
+			return nil
 		}
 	}
 
@@ -155,24 +179,36 @@ func (s *DirectStore) Get(obj interface{}) (item interface{}, exists bool, err e
 
 func (s *DirectStore) GetByKey(key string) (item interface{}, exists bool, err error) {
 	s.mu.RLock()
-	_, exists = s.keys[key]
+	info, exists := s.keys[key]
 	s.mu.RUnlock()
 
 	// Returning exists=true satisfies processDeltas so it can decide between Add/Update.
-	// The item itself is not needed because our EventHandler doesn't use the 'old' object.
+	// We return the info struct so that if a tombstone deletion occurs, the handler receives it.
 	if exists {
-		return struct{}{}, true, nil
+		return info, true, nil
 	}
 	return nil, false, nil
 }
 
 func (s *DirectStore) Replace(list []interface{}, resourceVersion string) error {
 	s.mu.Lock()
-	newKeys := make(map[string]struct{})
+	newKeys := make(map[string]datastore.ResourceInfo)
 	for _, obj := range list {
 		key, err := cache.MetaNamespaceKeyFunc(obj)
 		if err == nil {
-			newKeys[key] = struct{}{}
+			if u, ok := obj.(*unstructured.Unstructured); ok {
+				gvk := u.GroupVersionKind()
+				newKeys[key] = datastore.ResourceInfo{
+					ClusterName:     s.clusterName,
+					Group:           gvk.Group,
+					Version:         gvk.Version,
+					Kind:            gvk.Kind,
+					Namespace:       u.GetNamespace(),
+					Name:            u.GetName(),
+					ResourceVersion: u.GetResourceVersion(),
+					UID:             string(u.GetUID()),
+				}
+			}
 		}
 	}
 	s.keys = newKeys
