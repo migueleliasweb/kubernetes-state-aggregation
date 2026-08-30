@@ -153,6 +153,62 @@ func (f *FilterConfig) MatchesResource(resourceStr string) bool {
 	return true
 }
 
+// MatchesGVK checks if a resource's group, version, and kind match include/exclude rules.
+func (f *FilterConfig) MatchesGVK(
+	group string,
+	version string,
+	kind string,
+) bool {
+	if len(f.ExcludeResources) == 0 && len(f.IncludeResources) == 0 {
+		return true
+	}
+
+	lowerKind := strings.ToLower(kind)
+	candidates := []string{
+		kind,
+		lowerKind,
+		lowerKind + "s",
+	}
+
+	if group != "" {
+		candidates = append(
+			candidates,
+			fmt.Sprintf("%s/%s", group, kind),
+			fmt.Sprintf("%s/%s", group, lowerKind),
+			fmt.Sprintf("%s/%s", group, lowerKind+"s"),
+			fmt.Sprintf("%s/%s/%s", group, version, kind),
+			fmt.Sprintf("%s/%s/%s", group, version, lowerKind),
+			fmt.Sprintf("%s/%s/%s", group, version, lowerKind+"s"),
+		)
+	}
+
+	for _, cand := range candidates {
+		if !f.MatchesResource(cand) {
+			return false
+		}
+	}
+
+	if len(f.IncludeResources) > 0 {
+		matched := false
+		for _, cand := range candidates {
+			for _, pattern := range f.IncludeResources {
+				if matchPattern(pattern, cand) {
+					matched = true
+					break
+				}
+			}
+			if matched {
+				break
+			}
+		}
+		if !matched {
+			return false
+		}
+	}
+
+	return true
+}
+
 func matchPattern(pattern, target string) bool {
 	if pattern == "*" || pattern == target {
 		return true

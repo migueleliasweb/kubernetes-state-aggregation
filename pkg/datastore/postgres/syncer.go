@@ -215,6 +215,153 @@ func (s *PG) ListResourceKeys(
 	return keys, nil
 }
 
+// ListAllResourceKeys retrieves all resource identifiers for a given cluster.
+func (s *PG) ListAllResourceKeys(
+	ctx context.Context,
+	clusterName string,
+) ([]datastore.ResourceInfo, error) {
+	query := `
+	SELECT group_name, version, kind, namespace, name, uid, resource_version
+	FROM resources
+	WHERE cluster_name = $1
+	`
+	rows, err := s.db.QueryContext(ctx, query, clusterName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list all resource keys: %w", err)
+	}
+	defer rows.Close()
+
+	var keys []datastore.ResourceInfo
+	for rows.Next() {
+		var info datastore.ResourceInfo
+		info.ClusterName = clusterName
+
+		if err := rows.Scan(
+			&info.Group,
+			&info.Version,
+			&info.Kind,
+			&info.Namespace,
+			&info.Name,
+			&info.UID,
+			&info.ResourceVersion,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan resource key row: %w", err)
+		}
+
+		keys = append(keys, info)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating resource keys: %w", err)
+	}
+
+	return keys, nil
+}
+
+// ListClusters retrieves all distinct cluster names present in the datastore.
+func (s *PG) ListClusters(ctx context.Context) ([]string, error) {
+	rows, err := s.db.QueryContext(ctx, "SELECT DISTINCT cluster_name FROM resources")
+	if err != nil {
+		return nil, fmt.Errorf("failed to list clusters: %w", err)
+	}
+	defer rows.Close()
+
+	var clusters []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, fmt.Errorf("failed to scan cluster name: %w", err)
+		}
+
+		clusters = append(clusters, name)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating cluster names: %w", err)
+	}
+
+	return clusters, nil
+}
+
+// DeleteCluster removes all resources belonging to a cluster and returns the deleted row count.
+func (s *PG) DeleteCluster(
+	ctx context.Context,
+	clusterName string,
+) (int64, error) {
+	res, err := s.db.ExecContext(
+		ctx,
+		"DELETE FROM resources WHERE cluster_name = $1",
+		clusterName,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("failed to delete cluster %s resources: %w", clusterName, err)
+	}
+
+	rowsAff, err := res.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	return rowsAff, nil
+}
+
+// BatchDeleteResources removes a slice of resources within a single transaction.
+func (s *PG) BatchDeleteResources(
+	ctx context.Context,
+	resources []datastore.ResourceInfo,
+) (int64, error) {
+	if len(resources) == 0 {
+		return 0, nil
+	}
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	stmt, err := tx.PrepareContext(ctx, `
+	DELETE FROM resources
+	WHERE cluster_name = $1
+	  AND group_name = $2
+	  AND version = $3
+	  AND kind = $4
+	  AND namespace = $5
+	  AND name = $6;
+	`)
+	if err != nil {
+		return 0, fmt.Errorf("failed to prepare delete statement: %w", err)
+	}
+	defer stmt.Close()
+
+	var totalDeleted int64
+	for _, r := range resources {
+		res, err := stmt.ExecContext(
+			ctx,
+			r.ClusterName,
+			r.Group,
+			r.Version,
+			r.Kind,
+			r.Namespace,
+			r.Name,
+		)
+		if err != nil {
+			return 0, fmt.Errorf("failed to execute batch delete: %w", err)
+		}
+
+		rowsAff, err := res.RowsAffected()
+		if err == nil {
+			totalDeleted += rowsAff
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return 0, fmt.Errorf("failed to commit batch delete transaction: %w", err)
+	}
+
+	return totalDeleted, nil
+}
+
 // Close closes the database connection pool.
 func (s *PG) Close() error {
 	return s.db.Close()

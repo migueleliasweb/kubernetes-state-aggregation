@@ -58,6 +58,16 @@ clusters:
 		t.Errorf("us1 expected pods to be included")
 	}
 
+	if us1Filters.MatchesGVK("", "v1", "Event") {
+		t.Errorf("us1 expected Event GVK to be excluded")
+	}
+	if !us1Filters.MatchesGVK("", "v1", "Pod") {
+		t.Errorf("us1 expected Pod GVK to be included")
+	}
+	if us1Filters.MatchesGVK("coordination.k8s.io", "v1", "Lease") {
+		t.Errorf("us1 expected Lease GVK to be excluded")
+	}
+
 	eu1Filters := cfg.GetEffectiveFilters("eu1")
 	if !eu1Filters.MatchesNamespace("production") {
 		t.Errorf("eu1 expected production namespace to match")

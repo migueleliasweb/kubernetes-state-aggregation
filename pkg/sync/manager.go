@@ -36,6 +36,13 @@ func NewManager(
 
 // Start launches syncers for selected/configured clusters in goroutines and blocks until ctx is done.
 func (m *Manager) Start(ctx context.Context) error {
+	if err := RunStartupCleanup(ctx, m.cfg, m.store, m.targetCluster); err != nil {
+		slog.Error(
+			"error running startup cleanup",
+			"err", err,
+		)
+	}
+
 	var wg sync.WaitGroup
 
 	activeCount := 0

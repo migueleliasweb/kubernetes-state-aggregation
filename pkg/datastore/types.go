@@ -12,19 +12,23 @@ var ErrNotFound = errors.New("resource not found")
 
 // Syncer defines operations for synchronizing Kubernetes state to a datastore.
 type Syncer interface {
+	// InitSchema initializes the datastore schema and indexes if they do not exist.
 	InitSchema(ctx context.Context) error
 
+	// UpsertResource inserts or updates a resource manifest and its metadata in the datastore.
 	UpsertResource(
 		ctx context.Context,
 		clusterName string,
 		u *unstructured.Unstructured, // All other information can be found within the unstructured object
 	) error
 
+	// DeleteResource removes a single resource identified by the provided ResourceInfo.
 	DeleteResource(
 		ctx context.Context,
 		resourceInfo ResourceInfo,
 	) error
 
+	// ListResourceKeys queries basic identifiers for resources matching a specific cluster and GVK.
 	ListResourceKeys(
 		ctx context.Context,
 		clusterName string,
@@ -33,6 +37,28 @@ type Syncer interface {
 		kind string,
 	) ([]ResourceInfo, error)
 
+	// ListAllResourceKeys queries all stored resource identifiers for a specific cluster regardless of GVK.
+	ListAllResourceKeys(
+		ctx context.Context,
+		clusterName string,
+	) ([]ResourceInfo, error)
+
+	// ListClusters queries all distinct cluster names present in the datastore.
+	ListClusters(ctx context.Context) ([]string, error)
+
+	// DeleteCluster removes all stored resources for a cluster and returns the deleted count.
+	DeleteCluster(
+		ctx context.Context,
+		clusterName string,
+	) (int64, error)
+
+	// BatchDeleteResources removes multiple resources in a single batch operation and returns the deleted count.
+	BatchDeleteResources(
+		ctx context.Context,
+		resources []ResourceInfo,
+	) (int64, error)
+
+	// Close closes the underlying datastore connection pool or resources.
 	Close() error
 }
 

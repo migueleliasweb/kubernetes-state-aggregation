@@ -254,6 +254,99 @@ func (s *Syncer) ListResourceKeys(
 	return keys, nil
 }
 
+func (s *Syncer) ListAllResourceKeys(
+	ctx context.Context,
+	clusterName string,
+) ([]datastore.ResourceInfo, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var keys []datastore.ResourceInfo
+	prefix := clusterName + "/"
+
+	for key, item := range s.resources {
+		if strings.HasPrefix(key, prefix) {
+			u := item.u
+			gvk := u.GroupVersionKind()
+			keys = append(keys, datastore.ResourceInfo{
+				ClusterName:     clusterName,
+				Group:           gvk.Group,
+				Kind:            gvk.Kind,
+				Name:            u.GetName(),
+				Namespace:       u.GetNamespace(),
+				ResourceVersion: u.GetResourceVersion(),
+				UID:             string(u.GetUID()),
+				Version:         gvk.Version,
+			})
+		}
+	}
+
+	return keys, nil
+}
+
+func (s *Syncer) ListClusters(ctx context.Context) ([]string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	clusterSet := map[string]bool{}
+	for _, item := range s.resources {
+		clusterSet[item.clusterName] = true
+	}
+
+	clusters := make([]string, 0, len(clusterSet))
+	for cl := range clusterSet {
+		clusters = append(clusters, cl)
+	}
+
+	return clusters, nil
+}
+
+func (s *Syncer) DeleteCluster(
+	ctx context.Context,
+	clusterName string,
+) (int64, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var count int64
+	prefix := clusterName + "/"
+
+	for key := range s.resources {
+		if strings.HasPrefix(key, prefix) {
+			delete(s.resources, key)
+			count++
+		}
+	}
+
+	return count, nil
+}
+
+func (s *Syncer) BatchDeleteResources(
+	ctx context.Context,
+	resources []datastore.ResourceInfo,
+) (int64, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var count int64
+	for _, r := range resources {
+		key := s.getKey(
+			r.ClusterName,
+			r.Group,
+			r.Version,
+			r.Kind,
+			r.Namespace,
+			r.Name,
+		)
+		if _, exists := s.resources[key]; exists {
+			delete(s.resources, key)
+			count++
+		}
+	}
+
+	return count, nil
+}
+
 func (s *Syncer) Close() error {
 	return nil
 }

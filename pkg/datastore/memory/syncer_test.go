@@ -75,3 +75,85 @@ func TestMemorySyncerOperations(t *testing.T) {
 		t.Errorf("expected ErrNotFound after deletion, got %v", err)
 	}
 }
+
+func TestMemorySyncerCleanupOperations(t *testing.T) {
+	ctx := context.Background()
+	syncer := NewSyncer()
+
+	pod1 := &unstructured.Unstructured{}
+	pod1.SetGroupVersionKind(schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Pod"})
+	pod1.SetNamespace("default")
+	pod1.SetName("pod-1")
+	pod1.SetUID("uid-1")
+
+	pod2 := &unstructured.Unstructured{}
+	pod2.SetGroupVersionKind(schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Pod"})
+	pod2.SetNamespace("kube-system")
+	pod2.SetName("pod-2")
+	pod2.SetUID("uid-2")
+
+	deploy1 := &unstructured.Unstructured{}
+	deploy1.SetGroupVersionKind(schema.GroupVersionKind{Group: "apps", Version: "v1", Kind: "Deployment"})
+	deploy1.SetNamespace("default")
+	deploy1.SetName("dep-1")
+	deploy1.SetUID("uid-3")
+
+	_ = syncer.UpsertResource(ctx, "cluster-a", pod1)
+	_ = syncer.UpsertResource(ctx, "cluster-a", pod2)
+	_ = syncer.UpsertResource(ctx, "cluster-b", deploy1)
+
+	// Test ListClusters
+	clusters, err := syncer.ListClusters(ctx)
+	if err != nil {
+		t.Fatalf("ListClusters failed: %v", err)
+	}
+	if len(clusters) != 2 {
+		t.Errorf("expected 2 clusters, got %d", len(clusters))
+	}
+
+	// Test ListAllResourceKeys
+	keysA, err := syncer.ListAllResourceKeys(ctx, "cluster-a")
+	if err != nil {
+		t.Fatalf("ListAllResourceKeys failed: %v", err)
+	}
+	if len(keysA) != 2 {
+		t.Errorf("expected 2 keys in cluster-a, got %d", len(keysA))
+	}
+
+	// Test BatchDeleteResources
+	deleted, err := syncer.BatchDeleteResources(ctx, []datastore.ResourceInfo{
+		{
+			ClusterName: "cluster-a",
+			Group:       "",
+			Version:     "v1",
+			Kind:        "Pod",
+			Namespace:   "kube-system",
+			Name:        "pod-2",
+		},
+	})
+	if err != nil {
+		t.Fatalf("BatchDeleteResources failed: %v", err)
+	}
+	if deleted != 1 {
+		t.Errorf("expected 1 deleted, got %d", deleted)
+	}
+
+	keysAAfter, _ := syncer.ListAllResourceKeys(ctx, "cluster-a")
+	if len(keysAAfter) != 1 {
+		t.Errorf("expected 1 key remaining in cluster-a, got %d", len(keysAAfter))
+	}
+
+	// Test DeleteCluster
+	deletedClusterB, err := syncer.DeleteCluster(ctx, "cluster-b")
+	if err != nil {
+		t.Fatalf("DeleteCluster failed: %v", err)
+	}
+	if deletedClusterB != 1 {
+		t.Errorf("expected 1 resource deleted for cluster-b, got %d", deletedClusterB)
+	}
+
+	keysB, _ := syncer.ListAllResourceKeys(ctx, "cluster-b")
+	if len(keysB) != 0 {
+		t.Errorf("expected 0 keys in cluster-b, got %d", len(keysB))
+	}
+}

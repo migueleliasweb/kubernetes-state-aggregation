@@ -70,6 +70,41 @@ func (cs *ClusterSyncer) Start(ctx context.Context) error {
 		"count", len(resources),
 	)
 
+	// Build map of watchable discovered kinds to prune any stale resources from datastore
+	watchableKinds := map[string]bool{}
+	for _, res := range resources {
+		watchableKinds[fmt.Sprintf("%s/%s/%s", res.GVR.Group, res.GVR.Version, res.Kind)] = true
+	}
+
+	existingKeys, err := cs.store.ListAllResourceKeys(ctx, cs.clusterCfg.Name)
+	if err == nil && len(existingKeys) > 0 {
+		var toPrune []datastore.ResourceInfo
+
+		for _, key := range existingKeys {
+			gvkKey := fmt.Sprintf("%s/%s/%s", key.Group, key.Version, key.Kind)
+			if !watchableKinds[gvkKey] {
+				toPrune = append(toPrune, key)
+			}
+		}
+
+		if len(toPrune) > 0 {
+			pruned, err := cs.store.BatchDeleteResources(ctx, toPrune)
+			if err != nil {
+				slog.Error(
+					"failed to prune undiscovered resources",
+					"cluster", cs.clusterCfg.Name,
+					"err", err,
+				)
+			} else {
+				slog.Info(
+					"Pruned undiscovered or excluded resource kinds from datastore",
+					"cluster", cs.clusterCfg.Name,
+					"pruned_count", pruned,
+				)
+			}
+		}
+	}
+
 	var wg sync.WaitGroup
 
 	for _, res := range resources {
