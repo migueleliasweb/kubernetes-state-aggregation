@@ -83,3 +83,7 @@ ksactl describe deployment my-app -n default -c us1
 # Render visual dependency graph for a root resource
 ksactl graph deployment my-app -n default -c us1
 ```
+
+## Related projects
+
+- Kube State Visualizer
