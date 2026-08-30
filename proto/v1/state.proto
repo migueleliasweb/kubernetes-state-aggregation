@@ -1,0 +1,50 @@
+syntax = "proto3";
+
+package ksa.v1;
+
+option go_package = "github.com/migueleliasweb/kubernetes-state-aggregation/pkg/api/v1;v1";
+
+import "google/protobuf/timestamp.proto";
+
+// ResourceRecord represents a serialized Kubernetes resource state.
+message ResourceRecord {
+  string uid = 1;
+  string cluster_name = 2;
+  string group_name = 3;
+  string version = 4;
+  string kind = 5;
+  string namespace = 6;
+  string name = 7;
+  string resource_version = 8;
+  bytes manifest = 9;
+  bytes labels = 10;
+  bytes annotations = 11;
+  google.protobuf.Timestamp updated_at = 12;
+}
+
+// ResourceInfo defines the base information to identify a resource.
+message ResourceInfo {
+  string cluster_name = 1;
+  string group = 2;
+  string version = 3;
+  string kind = 4;
+  string namespace = 5;
+  string name = 6;
+  string uid = 7;
+  string resource_version = 8;
+}
+
+// FetchResourceGraphRequest requests the dependency graph for a root resource.
+message FetchResourceGraphRequest {
+  ResourceInfo root = 1;
+}
+
+// FetchResourceGraphResponse returns the list of unique resources in the graph.
+message FetchResourceGraphResponse {
+  repeated ResourceRecord items = 1;
+}
+
+// StateService provides access to aggregated Kubernetes state.
+service StateService {
+  rpc FetchResourceGraph(FetchResourceGraphRequest) returns (FetchResourceGraphResponse);
+}

@@ -9,15 +9,15 @@ import (
 )
 
 var (
-	dbURL    string
-	logLevel string
+	serverAddr string
+	logLevel   string
 )
 
 func newRootCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "ksactl",
 		Short: "Kubernetes State Aggregation (KSA) CLI",
-		Long:  "CLI tool to interact with the KSA datastore.",
+		Long:  "CLI tool to interact with the KSA API.",
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			var level slog.Level
 			if err := level.UnmarshalText([]byte(logLevel)); err != nil {
@@ -38,17 +38,17 @@ func newRootCmd() *cobra.Command {
 		},
 	}
 
-	defaultDBURL := os.Getenv("DB_URL")
-	if defaultDBURL == "" {
-		defaultDBURL = "postgres://postgres:password@localhost:5432/ksa?sslmode=disable"
+	defaultServerAddr := os.Getenv("KSA_API_ADDR")
+	if defaultServerAddr == "" {
+		defaultServerAddr = "127.0.0.1:50051"
 	}
 
 	cmd.PersistentFlags().StringVarP(
-		&dbURL,
-		"db-url",
-		"d",
-		defaultDBURL,
-		"PostgreSQL database connection URL",
+		&serverAddr,
+		"server",
+		"s",
+		defaultServerAddr,
+		"KSA gRPC API server address",
 	)
 	cmd.PersistentFlags().StringVarP(
 		&logLevel,

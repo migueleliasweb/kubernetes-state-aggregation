@@ -5,9 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/migueleliasweb/kubernetes-state-aggregation/pkg/datastore"
-	"github.com/migueleliasweb/kubernetes-state-aggregation/pkg/datastore/postgres"
+	v1 "github.com/migueleliasweb/kubernetes-state-aggregation/pkg/api/v1"
 	"github.com/spf13/cobra"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
@@ -25,35 +26,37 @@ func newGraphCmd() *cobra.Command {
 			kind := args[0]
 			name := args[1]
 
-			store, err := postgres.NewPGSyncer(dbURL)
+			conn, err := grpc.NewClient(
+				serverAddr,
+				grpc.WithTransportCredentials(insecure.NewCredentials()),
+			)
 			if err != nil {
-				return fmt.Errorf("failed to connect to database: %w", err)
+				return fmt.Errorf("failed to connect to gRPC server at %s: %w", serverAddr, err)
 			}
-			defer store.Close()
+			defer conn.Close()
+
+			client := v1.NewStateServiceClient(conn)
 
 			ctx := context.Background()
 
-			rootInfo := datastore.ResourceInfo{
-				Kind:        kind,
-				Name:        name,
-				Namespace:   namespace,
-				ClusterName: cluster,
-			}
-
-			collection, err := store.FetchResourceGraph(ctx, rootInfo, func(resourceInfo datastore.ResourceRecord) (datastore.WalkAction, error) {
-				return datastore.ActionInclude, nil
+			res, err := client.FetchResourceGraph(ctx, &v1.FetchResourceGraphRequest{
+				Root: &v1.ResourceInfo{
+					ClusterName: cluster,
+					Kind:        kind,
+					Name:        name,
+					Namespace:   namespace,
+				},
 			})
 			if err != nil {
 				return fmt.Errorf("failed to fetch resource graph: %w", err)
 			}
 
-			items := collection.Items()
-			if len(items) == 0 {
+			if len(res.Items) == 0 {
 				fmt.Println("No resources found matching the criteria.")
 				return nil
 			}
 
-			printGraph(items)
+			printGraph(res.Items)
 
 			return nil
 		},
@@ -66,30 +69,30 @@ func newGraphCmd() *cobra.Command {
 }
 
 type node struct {
-	record   datastore.ResourceRecord
+	record   *v1.ResourceRecord
 	children []*node
 }
 
-func printGraph(items []datastore.ResourceRecord) {
+func printGraph(items []*v1.ResourceRecord) {
 	// Build a map of UID to *node
-	nodes := make(map[string]*node)
+	nodes := map[string]*node{}
 	for _, item := range items {
-		nodes[item.UID] = &node{
+		nodes[item.Uid] = &node{
 			record: item,
 		}
 	}
 
 	// Identify roots and build the tree
-	isChild := make(map[string]bool)
+	isChild := map[string]bool{}
 	for _, n := range nodes {
-		if n.record.Manifest != nil {
+		if len(n.record.Manifest) > 0 {
 			var u unstructured.Unstructured
 			if err := json.Unmarshal(n.record.Manifest, &u.Object); err == nil {
 				for _, ownerRef := range u.GetOwnerReferences() {
 					parentUID := string(ownerRef.UID)
 					if parentNode, exists := nodes[parentUID]; exists {
 						parentNode.children = append(parentNode.children, n)
-						isChild[n.record.UID] = true
+						isChild[n.record.Uid] = true
 					}
 				}
 			}
@@ -97,9 +100,9 @@ func printGraph(items []datastore.ResourceRecord) {
 	}
 
 	// Find the roots (nodes that are not children of any other node in the collection)
-	var roots []*node
+	roots := []*node{}
 	for _, n := range nodes {
-		if !isChild[n.record.UID] {
+		if !isChild[n.record.Uid] {
 			roots = append(roots, n)
 		}
 	}
