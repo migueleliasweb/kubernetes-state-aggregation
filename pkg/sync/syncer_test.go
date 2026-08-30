@@ -58,7 +58,7 @@ func TestClusterSyncerWithFakeClients(t *testing.T) {
 				{
 					GroupVersion: "v1",
 					APIResources: []metav1.APIResource{
-						{Name: "pods", Namespaced: true, Verbs: metav1.Verbs{"get", "list", "watch"}},
+						{Name: "pods", Kind: "Pod", Namespaced: true, Verbs: metav1.Verbs{"get", "list", "watch"}},
 					},
 				},
 			},

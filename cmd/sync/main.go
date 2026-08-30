@@ -117,11 +117,16 @@ func newRootCmd() *cobra.Command {
 		"",
 		"Optional cluster name to isolate sync execution to a single cluster",
 	)
+	defaultDBURL := os.Getenv("DB_URL")
+	if defaultDBURL == "" {
+		defaultDBURL = "postgres://postgres:password@localhost:5432/ksa?sslmode=disable"
+	}
+
 	cmd.Flags().StringVarP(
 		&dbURL,
 		"db-url",
 		"d",
-		"postgres://postgres:postgres@localhost:5432/ksa?sslmode=disable",
+		defaultDBURL,
 		"PostgreSQL database connection URL",
 	)
 	cmd.Flags().StringVarP(

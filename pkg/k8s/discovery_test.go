@@ -17,15 +17,15 @@ func TestDiscoverWatchableResources(t *testing.T) {
 				{
 					GroupVersion: "v1",
 					APIResources: []metav1.APIResource{
-						{Name: "pods", Namespaced: true, Verbs: metav1.Verbs{"get", "list", "watch"}},
-						{Name: "pods/status", Namespaced: true, Verbs: metav1.Verbs{"get", "patch"}},
-						{Name: "events", Namespaced: true, Verbs: metav1.Verbs{"get", "list", "watch"}},
+						{Name: "pods", Kind: "Pod", Namespaced: true, Verbs: metav1.Verbs{"get", "list", "watch"}},
+						{Name: "pods/status", Kind: "Pod", Namespaced: true, Verbs: metav1.Verbs{"get", "patch"}},
+						{Name: "events", Kind: "Event", Namespaced: true, Verbs: metav1.Verbs{"get", "list", "watch"}},
 					},
 				},
 				{
 					GroupVersion: "apps/v1",
 					APIResources: []metav1.APIResource{
-						{Name: "deployments", Namespaced: true, Verbs: metav1.Verbs{"get", "list", "watch"}},
+						{Name: "deployments", Kind: "Deployment", Namespaced: true, Verbs: metav1.Verbs{"get", "list", "watch"}},
 					},
 				},
 			},
@@ -36,23 +36,30 @@ func TestDiscoverWatchableResources(t *testing.T) {
 		ExcludeResources: []string{"events"},
 	}
 
-	gvrs, err := DiscoverWatchableResources(fakeDiscovery, filters)
+	resources, err := DiscoverWatchableResources(fakeDiscovery, filters)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if len(gvrs) != 2 {
-		t.Fatalf("expected 2 GVRs (pods and deployments), got %d", len(gvrs))
+	if len(resources) != 2 {
+		t.Fatalf("expected 2 resources (pods and deployments), got %d", len(resources))
 	}
 
-	expectedMap := map[schema.GroupVersionResource]bool{
-		{Group: "", Version: "v1", Resource: "pods"}:            true,
-		{Group: "apps", Version: "v1", Resource: "deployments"}: true,
+	expectedMap := map[schema.GroupVersionResource]string{
+		{Group: "", Version: "v1", Resource: "pods"}:            "Pod",
+		{Group: "apps", Version: "v1", Resource: "deployments"}: "Deployment",
 	}
 
-	for _, gvr := range gvrs {
-		if !expectedMap[gvr] {
-			t.Errorf("unexpected GVR discovered: %v", gvr)
+	for _, res := range resources {
+		expectedKind, exists := expectedMap[res.GVR]
+		if !exists {
+			t.Errorf("unexpected GVR discovered: %v", res.GVR)
+		}
+		if res.Kind != expectedKind {
+			t.Errorf("expected kind %s for %v, got %s", expectedKind, res.GVR, res.Kind)
+		}
+		if !res.Namespaced {
+			t.Errorf("expected %v to be namespaced", res.GVR)
 		}
 	}
 }

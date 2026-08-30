@@ -10,8 +10,18 @@ import (
 	"k8s.io/client-go/discovery"
 )
 
+// DiscoveredResource represents a watchable Kubernetes API resource discovered from the server.
+type DiscoveredResource struct {
+	GVR        schema.GroupVersionResource
+	Kind       string
+	Namespaced bool
+}
+
 // DiscoverWatchableResources queries the API server for preferred API resources and filters watchable GVRs.
-func DiscoverWatchableResources(discoveryClient discovery.DiscoveryInterface, filters config.FilterConfig) ([]schema.GroupVersionResource, error) {
+func DiscoverWatchableResources(
+	discoveryClient discovery.DiscoveryInterface,
+	filters config.FilterConfig,
+) ([]DiscoveredResource, error) {
 	apiResourceLists, err := discoveryClient.ServerPreferredResources()
 	if err != nil || len(apiResourceLists) == 0 {
 		var err2 error
@@ -24,7 +34,7 @@ func DiscoverWatchableResources(discoveryClient discovery.DiscoveryInterface, fi
 		}
 	}
 
-	var gvrs []schema.GroupVersionResource
+	var resources []DiscoveredResource
 	for _, apiList := range apiResourceLists {
 		gv, err := schema.ParseGroupVersion(apiList.GroupVersion)
 		if err != nil {
@@ -50,15 +60,19 @@ func DiscoverWatchableResources(discoveryClient discovery.DiscoveryInterface, fi
 				continue
 			}
 
-			gvrs = append(gvrs, schema.GroupVersionResource{
-				Group:    gv.Group,
-				Version:  gv.Version,
-				Resource: apiRes.Name,
+			resources = append(resources, DiscoveredResource{
+				GVR: schema.GroupVersionResource{
+					Group:    gv.Group,
+					Version:  gv.Version,
+					Resource: apiRes.Name,
+				},
+				Kind:       apiRes.Kind,
+				Namespaced: apiRes.Namespaced,
 			})
 		}
 	}
 
-	return gvrs, nil
+	return resources, nil
 }
 
 func hasVerb(verbs metav1.Verbs, target string) bool {

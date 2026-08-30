@@ -59,7 +59,7 @@ func newGraphCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVarP(&namespace, "namespace", "n", "default", "Kubernetes namespace")
+	cmd.Flags().StringVarP(&namespace, "namespace", "n", "", "Optional Kubernetes namespace filter")
 	cmd.Flags().StringVarP(&cluster, "cluster", "c", "", "Optional cluster name filter")
 
 	return cmd
@@ -105,16 +105,23 @@ func printGraph(items []datastore.ResourceRecord) {
 	}
 
 	// Print the tree
-	for _, root := range roots {
-		// Pass false for isLast on the very first root level, but let's just use empty prefix and no line for absolute root?
-		// Usually a tree prints the root directly, then ├── for children.
-		fmt.Printf("%s %s/%s", root.record.Kind, root.record.Namespace, root.record.Name)
-		if root.record.ClusterName != "" {
-			fmt.Printf(" [%s]", root.record.ClusterName)
+	for i, root := range roots {
+		if i > 0 {
+			fmt.Println()
 		}
-		fmt.Println()
-		for i, child := range root.children {
-			printNode(child, "", i == len(root.children)-1)
+
+		nsStr := ""
+		if root.record.Namespace != "" {
+			nsStr = fmt.Sprintf("%s/", root.record.Namespace)
+		}
+		clusterStr := ""
+		if root.record.ClusterName != "" {
+			clusterStr = fmt.Sprintf(" [%s]", root.record.ClusterName)
+		}
+
+		fmt.Printf("%s %s%s%s\n", root.record.Kind, nsStr, root.record.Name, clusterStr)
+		for j, child := range root.children {
+			printNode(child, "", j == len(root.children)-1)
 		}
 	}
 }

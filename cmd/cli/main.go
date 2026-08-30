@@ -38,11 +38,16 @@ func newRootCmd() *cobra.Command {
 		},
 	}
 
+	defaultDBURL := os.Getenv("DB_URL")
+	if defaultDBURL == "" {
+		defaultDBURL = "postgres://postgres:password@localhost:5432/ksa?sslmode=disable"
+	}
+
 	cmd.PersistentFlags().StringVarP(
 		&dbURL,
 		"db-url",
 		"d",
-		"postgres://postgres:postgres@localhost:5432/ksa?sslmode=disable",
+		defaultDBURL,
 		"PostgreSQL database connection URL",
 	)
 	cmd.PersistentFlags().StringVarP(

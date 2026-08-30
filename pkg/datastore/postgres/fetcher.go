@@ -92,8 +92,14 @@ func (s *PG) FetchResourceGraph(
 		argID++
 	}
 
-	baseQuery += fmt.Sprintf(" AND kind = $%d AND namespace = $%d AND name = $%d", argID, argID+1, argID+2)
-	args = append(args, rootResourceInfo.Kind, rootResourceInfo.Namespace, rootResourceInfo.Name)
+	if rootResourceInfo.Namespace != "" {
+		baseQuery += fmt.Sprintf(" AND namespace = $%d", argID)
+		args = append(args, rootResourceInfo.Namespace)
+		argID++
+	}
+
+	baseQuery += fmt.Sprintf(" AND kind = $%d AND name = $%d", argID, argID+1)
+	args = append(args, rootResourceInfo.Kind, rootResourceInfo.Name)
 
 	rootRecords, err = s.fetchResourceRecords(ctx, baseQuery, args...)
 

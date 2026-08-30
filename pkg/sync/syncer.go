@@ -55,7 +55,7 @@ func (cs *ClusterSyncer) Start(ctx context.Context) error {
 		"cluster", cs.clusterCfg.Name,
 	)
 
-	gvrs, err := k8s.DiscoverWatchableResources(
+	resources, err := k8s.DiscoverWatchableResources(
 		cs.discClient,
 		cs.filters,
 	)
@@ -65,31 +65,54 @@ func (cs *ClusterSyncer) Start(ctx context.Context) error {
 	}
 
 	slog.Info(
-		"Discovered watchable GVRs",
+		"Discovered watchable resources",
 		"cluster", cs.clusterCfg.Name,
-		"count", len(gvrs),
+		"count", len(resources),
 	)
 
 	var wg sync.WaitGroup
 
-	for _, gvr := range gvrs {
+	for _, res := range resources {
 		wg.Add(1)
-		go func(gvr schema.GroupVersionResource) {
+		go func(res k8s.DiscoveredResource) {
 			defer wg.Done()
 
-			// 1. Create the DirectStore
-			// We pass "" as kind for now because GVR doesn't strictly have Kind.
-			// The datastore will match the Group/Version.
+			gvr := res.GVR
+			kind := res.Kind
+
+			// 1. Create the DirectStore and initialize keys for this specific Kind
 			directStore := NewDirectStore(cs.clusterCfg.Name, gvr, cs.store)
-			if err := directStore.InitializeKeys(ctx, ""); err != nil {
-				slog.Error("failed to initialize keys for GVR", "cluster", cs.clusterCfg.Name, "gvr", gvr.String(), "err", err)
+			if err := directStore.InitializeKeys(ctx, kind); err != nil {
+				slog.Error(
+					"failed to initialize keys for GVR",
+					"cluster", cs.clusterCfg.Name,
+					"gvr", gvr.String(),
+					"kind", kind,
+					"err", err,
+				)
+
 				return
 			}
 
 			// 2. Create the ListerWatcher
 			lw := &cache.ListWatch{
 				ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
-					return cs.dynClient.Resource(gvr).List(ctx, options)
+					listObj, err := cs.dynClient.Resource(gvr).List(ctx, options)
+					if err != nil {
+						return nil, err
+					}
+
+					for i := range listObj.Items {
+						if listObj.Items[i].GetKind() == "" {
+							listObj.Items[i].SetGroupVersionKind(schema.GroupVersionKind{
+								Group:   gvr.Group,
+								Version: gvr.Version,
+								Kind:    kind,
+							})
+						}
+					}
+
+					return listObj, nil
 				},
 				WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
 					return cs.dynClient.Resource(gvr).Watch(ctx, options)
@@ -100,24 +123,83 @@ func (cs *ClusterSyncer) Start(ctx context.Context) error {
 			handler := cache.ResourceEventHandlerFuncs{
 				AddFunc: func(obj interface{}) {
 					u, ok := obj.(*unstructured.Unstructured)
-					if ok && cs.filters.MatchesNamespace(u.GetNamespace()) {
+					if !ok {
+						return
+					}
+
+					if u.GetKind() == "" {
+						u.SetGroupVersionKind(schema.GroupVersionKind{
+							Group:   gvr.Group,
+							Version: gvr.Version,
+							Kind:    kind,
+						})
+					}
+
+					if cs.filters.MatchesNamespace(u.GetNamespace()) {
 						if err := directStore.Add(obj); err != nil {
-							slog.Error("error adding resource", "cluster", cs.clusterCfg.Name, "gvr", gvr.String(), "name", u.GetName(), "err", err)
+							slog.Error(
+								"error adding resource",
+								"cluster", cs.clusterCfg.Name,
+								"gvr", gvr.String(),
+								"kind", kind,
+								"name", u.GetName(),
+								"err", err,
+							)
 						}
 					}
 				},
 				UpdateFunc: func(oldObj, newObj interface{}) {
 					u, ok := newObj.(*unstructured.Unstructured)
-					if ok && cs.filters.MatchesNamespace(u.GetNamespace()) {
+					if !ok {
+						return
+					}
+
+					if u.GetKind() == "" {
+						u.SetGroupVersionKind(schema.GroupVersionKind{
+							Group:   gvr.Group,
+							Version: gvr.Version,
+							Kind:    kind,
+						})
+					}
+
+					if cs.filters.MatchesNamespace(u.GetNamespace()) {
 						if err := directStore.Update(newObj); err != nil {
-							slog.Error("error updating resource", "cluster", cs.clusterCfg.Name, "gvr", gvr.String(), "name", u.GetName(), "err", err)
+							slog.Error(
+								"error updating resource",
+								"cluster", cs.clusterCfg.Name,
+								"gvr", gvr.String(),
+								"kind", kind,
+								"name", u.GetName(),
+								"err", err,
+							)
+						}
+					} else {
+						// If it no longer matches the filter, delete it if we were tracking it
+						_, exists, _ := directStore.Get(newObj)
+						if exists {
+							if err := directStore.Delete(newObj); err != nil {
+								slog.Error(
+									"error deleting resource due to filter change",
+									"cluster", cs.clusterCfg.Name,
+									"gvr", gvr.String(),
+									"kind", kind,
+									"name", u.GetName(),
+									"err", err,
+								)
+							}
 						}
 					}
 				},
 				DeleteFunc: func(obj interface{}) {
 					// Namespace filtering is skipped on delete since we want to delete what we tracked.
 					if err := directStore.Delete(obj); err != nil {
-						slog.Error("error deleting resource", "cluster", cs.clusterCfg.Name, "gvr", gvr.String(), "err", err)
+						slog.Error(
+							"error deleting resource",
+							"cluster", cs.clusterCfg.Name,
+							"gvr", gvr.String(),
+							"kind", kind,
+							"err", err,
+						)
 					}
 				},
 			}
@@ -142,8 +224,6 @@ func (cs *ClusterSyncer) Start(ctx context.Context) error {
 						case cache.Sync, cache.Replaced, cache.Added, cache.Updated:
 							// For updates/adds, just call UpdateFunc or AddFunc.
 							// The handler itself will write to the DirectStore.
-							// Wait, if it's a new item, call Add. If exists, call Update.
-							// Let's check directStore to see if it exists.
 							_, exists, _ := directStore.Get(d.Object)
 							if exists {
 								handler.OnUpdate(nil, d.Object)
@@ -167,7 +247,7 @@ func (cs *ClusterSyncer) Start(ctx context.Context) error {
 			// Start the controller
 			controller.Run(ctx.Done())
 
-		}(gvr)
+		}(res)
 	}
 
 	slog.Info(
