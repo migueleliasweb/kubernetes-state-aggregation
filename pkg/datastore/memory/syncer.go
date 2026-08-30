@@ -3,6 +3,7 @@ package memory
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/migueleliasweb/kubernetes-state-aggregation/pkg/datastore"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -96,6 +97,44 @@ func (s *Syncer) GetResource(
 	)
 
 	return s.resources[key]
+}
+
+func (s *Syncer) ListResourceKeys(
+	ctx context.Context,
+	clusterName string,
+	group string,
+	version string,
+	kind string,
+) ([]datastore.ResourceInfo, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var keys []datastore.ResourceInfo
+	var prefix string
+	if kind != "" {
+		prefix = fmt.Sprintf("%s/%s/%s/%s/", clusterName, group, version, kind)
+	} else {
+		// Just match the version prefix
+		prefix = fmt.Sprintf("%s/%s/%s/", clusterName, group, version)
+	}
+
+	for key, u := range s.resources {
+		if strings.HasPrefix(key, prefix) {
+			gvk := u.GroupVersionKind()
+			keys = append(keys, datastore.ResourceInfo{
+				ClusterName:     clusterName,
+				Group:           group,
+				Version:         version,
+				Kind:            gvk.Kind,
+				Namespace:       u.GetNamespace(),
+				Name:            u.GetName(),
+				UID:             string(u.GetUID()),
+				ResourceVersion: u.GetResourceVersion(),
+			})
+		}
+	}
+
+	return keys, nil
 }
 
 func (s *Syncer) Close() error {

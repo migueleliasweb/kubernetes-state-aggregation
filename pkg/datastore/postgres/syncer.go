@@ -160,6 +160,60 @@ func (s *PG) DeleteResource(
 	return nil
 }
 
+// ListResourceKeys retrieves all basic resource identifiers for a given cluster and GVR.
+func (s *PG) ListResourceKeys(
+	ctx context.Context,
+	clusterName string,
+	group string,
+	version string,
+	kind string,
+) ([]datastore.ResourceInfo, error) {
+	query := `
+	SELECT namespace, name, uid, resource_version
+	FROM resources
+	WHERE cluster_name = $1
+	  AND group_name = $2
+	  AND version = $3
+	`
+	args := []interface{}{clusterName, group, version}
+
+	if kind != "" {
+		query += " AND kind = $4"
+		args = append(args, kind)
+	}
+
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list resource keys: %w", err)
+	}
+	defer rows.Close()
+
+	var keys []datastore.ResourceInfo
+	for rows.Next() {
+		var info datastore.ResourceInfo
+		info.ClusterName = clusterName
+		info.Group = group
+		info.Version = version
+		info.Kind = kind
+
+		if err := rows.Scan(
+			&info.Namespace,
+			&info.Name,
+			&info.UID,
+			&info.ResourceVersion,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan resource key row: %w", err)
+		}
+		keys = append(keys, info)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating resource keys: %w", err)
+	}
+
+	return keys, nil
+}
+
 // Close closes the database connection pool.
 func (s *PG) Close() error {
 	return s.db.Close()

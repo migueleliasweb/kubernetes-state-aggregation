@@ -67,6 +67,14 @@ type Syncer interface {
 		resourceInfo ResourceInfo,
 	) error
 
+	ListResourceKeys(
+		ctx context.Context,
+		clusterName string,
+		group string,
+		version string,
+		kind string,
+	) ([]ResourceInfo, error)
+
 	Close() error
 }
 
