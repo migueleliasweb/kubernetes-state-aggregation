@@ -5,8 +5,9 @@ Your Global Kubernetes State, queryable.
 
 ## Goals
 
-- Provide a globally aggregated snapshot of your Kubernetes clusters state
-- Provide an API-first queryable design, with a CLI tool to query and visualize the state
+- Provide a globally aggregated snapshot of multiple Kubernetes clusters state.
+- Provide an API-first queryable design, with a CLI tool to query and visualize the state.
+- Leverage Postgres flexibility and speed to provide advanced queries and reporting on top of Kubernetes state.
 
 ---
 
