@@ -1,19 +1,19 @@
 C4Context
     title Kubernetes State Aggregation - High Level Design
 
-    Person(client, "Administrator", "Uses kubectl or ksacli <br />to interact with aggregated <br />and regional endpoints")
+    Person(client, "Administrator / Client", "Uses ksactl or gRPC client to query global state, describe resources, and traverse dependency graphs")
 
     System_Ext(k8s_us1, "Kubernetes API Server US1", "Remote Kubernetes cluster API server in US1")
     System_Ext(k8s_eu1, "Kubernetes API Server EU1", "Remote Kubernetes cluster API server in EU1")
     System_Ext(k8s_ap1, "Kubernetes API Server AP1", "Remote Kubernetes cluster API server in AP1")
 
     System_Boundary(ksa, "Kubernetes State Aggregation (KSA)") {
-        System(ksa_api, "Kubernetes State Aggregation API", "Exposes aggregated API proxy on port 8080 <br />and regional proxies on ports 8081-8083")
-        SystemDb(db, "PostgreSQL", "Stores aggregated <br/> Kubernetes state")
+        System(ksa_server, "KSA Server Daemon", "Hosts the multi-cluster Sync Manager and gRPC StateService (:50051)")
+        SystemDb(db, "PostgreSQL", "Stores aggregated Kubernetes resources, metadata, and JSONB manifests")
     }
 
-    Rel(client, ksa_api, "Supports native <br/>kubectl queries")
-    Rel(ksa_api, db, "Aggregates <br />state into", "SQL")
-    Rel(ksa_api, k8s_us1, "Watches resources <br/>from")
-    Rel(ksa_api, k8s_eu1, "Watches resources <br/>from")
-    Rel(ksa_api, k8s_ap1, "Watches resources <br/>from")
+    Rel(client, ksa_server, "Queries state and graphs via gRPC", "gRPC / :50051")
+    Rel(ksa_server, db, "Persists synced state & executes graph queries", "SQL / pgx")
+    Rel(ksa_server, k8s_us1, "Discovers and watches resources", "HTTPS / client-go")
+    Rel(ksa_server, k8s_eu1, "Discovers and watches resources", "HTTPS / client-go")
+    Rel(ksa_server, k8s_ap1, "Discovers and watches resources", "HTTPS / client-go")

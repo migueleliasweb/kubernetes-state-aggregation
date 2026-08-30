@@ -1,24 +1,22 @@
 flowchart TD
-    K8s1{{Kubernetes API Server US1}}
-    K8s2{{Kubernetes API Server EU1}}
-    K8s3{{Kubernetes API Server AP1}}
-    
-    subgraph KSA
-        KSAAPI[Kubernetes State Aggregation API]
-
-        DB[(PostgreSQL)]
-
-        KSAAPI --> |Aggregates state into| DB
-
-        KSAAPI --> |Aggregated API proxy exposed on| Port:8080
-        KSAAPI --> |US1 API proxy exposed on| Port:8081
-        KSAAPI --> |EU1 API proxy exposed on| Port:8082
-        KSAAPI --> |AP1 API proxy exposed on| Port:8083
+    subgraph Remote Clusters [Remote Kubernetes Clusters]
+        K8s1{{Kubernetes API Server US1}}
+        K8s2{{Kubernetes API Server EU1}}
+        K8s3{{Kubernetes API Server AP1}}
     end
 
-    KSAAPI -.-> |Syncs state from| K8s1
-    KSAAPI -.-> |Syncs state from| K8s2
-    KSAAPI -.-> |Syncs state from| K8s3
+    subgraph KSA [Kubernetes State Aggregation Server Daemon]
+        SyncMgr[Sync Manager<br/>Dynamic Informers & Startup Reconciliation]
+        DB[(PostgreSQL Database<br/>Resources, Metadata & Graph Indices)]
+        StateAPI[gRPC StateService Server<br/>Port :50051]
 
-    %% K8sClient[kubectl get pods --server :8081]
-    %% K8sClient[kubectl get pods --server :8081] --> |Supports native kubectl| Port:8081
+        SyncMgr --> |Upserts / Deletes State| DB
+        DB --> |Reads State & Graph Traversal| StateAPI
+    end
+
+    K8s1 -.-> |Watches & Discovers Resources| SyncMgr
+    K8s2 -.-> |Watches & Discovers Resources| SyncMgr
+    K8s3 -.-> |Watches & Discovers Resources| SyncMgr
+
+    Client["ksactl CLI / gRPC Clients<br/>(get, describe, graph)"]
+    Client --> |Calls RPCs over gRPC| StateAPI

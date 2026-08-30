@@ -1,6 +1,12 @@
 # Kubernetes State Aggregation (KSA)
 
-**Kubernetes State Aggregation (KSA)** is a high-performance multi-cluster state aggregation service designed to dynamically discover, watch, and synchronize state across multiple Kubernetes clusters into a central PostgreSQL database. Built with Go and low-level `client-go` controllers, KSA provides real-time state visibility with a direct-to-database architecture that eliminates memory bloat, customizable namespace/resource filtering, structured JSON logging (`log/slog`), and automated schema management.
+Your Global Kubernetes State, queryable.
+
+
+## Goals
+
+- Provide a globally aggregated snapshot of your Kubernetes clusters state
+- Provide an API-first queryable design, with a CLI tool to query and visualize the state
 
 ---
 
@@ -9,40 +15,23 @@
 - **Multi-Cluster Orchestration**: Connects to and syncs state from multiple Kubernetes API servers concurrently.
 - **Dynamic Resource Discovery**: Uses low-level `client-go` controllers to automatically discover and watch API resources without pre-generated CRD structs, streaming data directly to the database to prevent memory explosion.
 - **Automated State Reconciliation**: Seamlessly handles "missed deletes" (e.g., resources removed while the syncer was offline) by comparing the database against the cluster state on startup.
-- **Data Layer Graph Queryability**: Provides a robust `Fetcher` interface to dynamically query and traverse relational graphs of aggregated resources.
+- **Unified Server Daemon**: Run the background sync worker, the gRPC state query service, or both within a single binary.
+- **`ksactl` CLI**: Inspect aggregated cluster resources (`get`, `describe`) and render dependency graphs (`graph`) with formatted table, tree, YAML, and JSON outputs.
 - **Flexible Filtering**: Global and per-cluster filter options for namespaces, excluded resources, and label selectors.
 - **PostgreSQL Persistence**: Stores dynamic Kubernetes resource states, metadata, and JSON representations in a centralized PostgreSQL database.
-- **Structured JSON Logging**: Powered by Go standard library `log/slog` with caller source locations (file and line numbers) and configurable log levels.
 
 ---
 
-## Getting Started
-
-### Prerequisites
-
-- **Go**: `1.21+` (or standard Go toolchain)
-- **PostgreSQL**: Local or remote PostgreSQL instance (e.g. `postgres://postgres:postgres@localhost:5432/ksa?sslmode=disable`)
-- **Kubernetes Access**: Kubeconfig file(s) with access to target cluster(s)
-
----
-
-## Configuration
-
-Copy the example configuration file and customize it for your environment:
-
-```bash
-cp config.example.yaml config.yaml
-```
-
-Example configuration (`config.yaml`):
+## Example configuration
 
 ```yaml
 global_filters:
   include_namespaces:
-    - "default"
-    - "kube-system"
+    - "*" # Include all namespaces
   exclude_resources:
     - "events"
+    - "secrets"
+    - "coordination.k8s.io/v1/leases"
 
 clusters:
   - name: us1
@@ -52,60 +41,44 @@ clusters:
     disabled: false
 ```
 
----
+## Running locally
 
-## Running the Sync Worker
+The KSA server daemon (`cmd/server`) runs both the multi-cluster sync worker and the gRPC API server.
 
 ### Using `go run`
 
+This runs the gRPC server and sync worker.
+
 ```bash
-go run ./cmd/sync --config config.yaml --db-url "postgres://postgres:postgres@localhost:5432/ksa?sslmode=disable"
+go run ./cmd/server --config config.yaml --db-url "postgres://postgres:yourpass@localhost:5432/ksa?sslmode=disable"
 ```
 
-### Building and Executing Binary
+## Using the `ksactl` CLI
 
+The `ksactl` CLI (`cmd/cli`) connects to the KSA gRPC API server to query and visualize aggregated cluster state.
+
+### Commands & Examples
+
+#### 1. List Resources (`ksactl get`)
 ```bash
-# Build the executable
-go build -o bin/ksasync ./cmd/sync
+# List all pods across all clusters
+ksactl get pods
 
-# Run the sync worker
-./bin/ksasync --config config.yaml --log-level info
+# Filter by namespace and cluster
+ksactl get deployments -n default -c us1
+
+# Output as YAML or JSON
+ksactl get services -o yaml
 ```
 
----
-
-## CLI Command Flags
-
-| Flag | Short | Default | Description |
-| :--- | :--- | :--- | :--- |
-| `--config` | `-c` | `config.yaml` | Path to the KSA configuration file (YAML/JSON) |
-| `--db-url` | `-d` | `postgres://postgres:postgres@localhost:5432/ksa?sslmode=disable` | PostgreSQL database connection URL |
-| `--cluster` | `-l` | `""` | Optional cluster name to isolate sync execution to a single cluster |
-| `--log-level` | `-v` | `info` | Log verbosity level (`debug`, `info`, `warn`, `error`) |
-| `--help` | `-h` | — | Display help information for `ksasync` |
-
----
-
-## Examples
-
-### Run with Debug Logging enabled
-
+#### 2. Describe Resource (`ksactl describe`)
 ```bash
-go run ./cmd/sync -c config.yaml -v debug
+# Describe a specific deployment
+ksactl describe deployment my-app -n default -c us1
 ```
 
-### Isolate Execution to a Single Cluster (`us1`)
-
+#### 3. Traverse Dependency Graph (`ksactl graph`)
 ```bash
-go run ./cmd/sync -c config.yaml -l us1
-```
-
----
-
-## Testing
-
-Run all unit and integration tests across packages:
-
-```bash
-go test ./...
+# Render visual dependency graph for a root resource
+ksactl graph deployment my-app -n default -c us1
 ```
