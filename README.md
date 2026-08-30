@@ -1,13 +1,15 @@
 # Kubernetes State Aggregation (KSA)
 
-**Kubernetes State Aggregation (KSA)** is a high-performance multi-cluster state aggregation service designed to dynamically discover, watch, and synchronize state across multiple Kubernetes clusters into a central PostgreSQL database. Built with Go and `client-go` dynamic informers, KSA provides real-time state visibility with customizable namespace/resource filtering, structured JSON logging (`log/slog`), and automated schema management.
+**Kubernetes State Aggregation (KSA)** is a high-performance multi-cluster state aggregation service designed to dynamically discover, watch, and synchronize state across multiple Kubernetes clusters into a central PostgreSQL database. Built with Go and low-level `client-go` controllers, KSA provides real-time state visibility with a direct-to-database architecture that eliminates memory bloat, customizable namespace/resource filtering, structured JSON logging (`log/slog`), and automated schema management.
 
 ---
 
 ## Features
 
 - **Multi-Cluster Orchestration**: Connects to and syncs state from multiple Kubernetes API servers concurrently.
-- **Dynamic Resource Discovery**: Uses dynamic client-go informers to automatically discover and watch API resources without pre-generated CRD structs.
+- **Dynamic Resource Discovery**: Uses low-level `client-go` controllers to automatically discover and watch API resources without pre-generated CRD structs, streaming data directly to the database to prevent memory explosion.
+- **Automated State Reconciliation**: Seamlessly handles "missed deletes" (e.g., resources removed while the syncer was offline) by comparing the database against the cluster state on startup.
+- **Data Layer Graph Queryability**: Provides a robust `Fetcher` interface to dynamically query and traverse relational graphs of aggregated resources.
 - **Flexible Filtering**: Global and per-cluster filter options for namespaces, excluded resources, and label selectors.
 - **PostgreSQL Persistence**: Stores dynamic Kubernetes resource states, metadata, and JSON representations in a centralized PostgreSQL database.
 - **Structured JSON Logging**: Powered by Go standard library `log/slog` with caller source locations (file and line numbers) and configurable log levels.
