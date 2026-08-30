@@ -22,9 +22,13 @@ import (
 type ClusterSyncer struct {
 	clusterCfg config.ClusterConfig
 	filters    config.FilterConfig
+
 	store      datastore.Syncer
 	dynClient  dynamic.Interface
 	discClient discovery.DiscoveryInterface
+
+	controllers []cache.Controller
+	mu          sync.RWMutex
 }
 
 // NewClusterSyncer creates a ClusterSyncer instance.
@@ -156,6 +160,10 @@ func (cs *ClusterSyncer) Start(ctx context.Context) error {
 			}
 
 			controller := cache.New(cfg)
+
+			cs.mu.Lock()
+			cs.controllers = append(cs.controllers, controller)
+			cs.mu.Unlock()
 			
 			// Start the controller
 			controller.Run(ctx.Done())
