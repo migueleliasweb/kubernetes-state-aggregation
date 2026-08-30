@@ -173,7 +173,7 @@ func TestClusterSyncerWithFakeClients(t *testing.T) {
 // We test the logic of filtering instead.
 func TestClusterSyncerFilters(t *testing.T) {
 	filters := config.FilterConfig{
-		IncludeNamespaces: []string{"default"},
+		IncludeNamespaces:    []string{"default"},
 		IncludeClusterScoped: true,
 	}
 

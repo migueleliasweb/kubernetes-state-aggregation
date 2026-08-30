@@ -67,38 +67,35 @@ func (s *PG) FetchResourceGraph(
 	// 1. Fetch root node(s)
 	var rootRecords []datastore.ResourceRecord
 	var err error
-	if rootResourceInfo.ClusterName == "" {
-		query := `
-			SELECT cluster_name, group_name, version, kind, namespace, name, uid, resource_version, labels, manifest, updated_at
-			FROM resources
-			WHERE group_name = $1 AND version = $2 AND kind = $3 AND namespace = $4 AND name = $5
-		`
-		rootRecords, err = s.fetchResourceRecords(
-			ctx,
-			query,
-			rootResourceInfo.Group,
-			rootResourceInfo.Version,
-			rootResourceInfo.Kind,
-			rootResourceInfo.Namespace,
-			rootResourceInfo.Name,
-		)
-	} else {
-		query := `
-			SELECT cluster_name, group_name, version, kind, namespace, name, uid, resource_version, labels, manifest, updated_at
-			FROM resources
-			WHERE cluster_name = $1 AND group_name = $2 AND version = $3 AND kind = $4 AND namespace = $5 AND name = $6
-		`
-		rootRecords, err = s.fetchResourceRecords(
-			ctx,
-			query,
-			rootResourceInfo.ClusterName,
-			rootResourceInfo.Group,
-			rootResourceInfo.Version,
-			rootResourceInfo.Kind,
-			rootResourceInfo.Namespace,
-			rootResourceInfo.Name,
-		)
+
+	baseQuery := `
+		SELECT cluster_name, group_name, version, kind, namespace, name, uid, resource_version, labels, manifest, updated_at
+		FROM resources
+		WHERE 1=1
+	`
+	var args []any
+	argID := 1
+
+	if rootResourceInfo.ClusterName != "" {
+		baseQuery += fmt.Sprintf(" AND cluster_name = $%d", argID)
+		args = append(args, rootResourceInfo.ClusterName)
+		argID++
 	}
+	if rootResourceInfo.Group != "" {
+		baseQuery += fmt.Sprintf(" AND group_name = $%d", argID)
+		args = append(args, rootResourceInfo.Group)
+		argID++
+	}
+	if rootResourceInfo.Version != "" {
+		baseQuery += fmt.Sprintf(" AND version = $%d", argID)
+		args = append(args, rootResourceInfo.Version)
+		argID++
+	}
+
+	baseQuery += fmt.Sprintf(" AND kind = $%d AND namespace = $%d AND name = $%d", argID, argID+1, argID+2)
+	args = append(args, rootResourceInfo.Kind, rootResourceInfo.Namespace, rootResourceInfo.Name)
+
+	rootRecords, err = s.fetchResourceRecords(ctx, baseQuery, args...)
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch root resource(s): %w", err)

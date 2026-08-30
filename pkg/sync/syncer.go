@@ -96,7 +96,6 @@ func (cs *ClusterSyncer) Start(ctx context.Context) error {
 				},
 			}
 
-
 			// 3. We wrap the DirectStore in a namespace-filtering EventHandler
 			handler := cache.ResourceEventHandlerFuncs{
 				AddFunc: func(obj interface{}) {
@@ -164,10 +163,10 @@ func (cs *ClusterSyncer) Start(ctx context.Context) error {
 			cs.mu.Lock()
 			cs.controllers = append(cs.controllers, controller)
 			cs.mu.Unlock()
-			
+
 			// Start the controller
 			controller.Run(ctx.Done())
-			
+
 		}(gvr)
 	}
 
