@@ -55,6 +55,92 @@ func (s *PG) fetchResourceRecords(
 	return records, nil
 }
 
+// GetResource queries for a single resource matching the given ResourceInfo.
+func (s *PG) GetResource(
+	ctx context.Context,
+	info datastore.ResourceInfo,
+) (*datastore.ResourceRecord, error) {
+	records, err := s.ListResources(ctx, info)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(records) == 0 {
+		return nil, datastore.ErrNotFound
+	}
+
+	if len(records) > 1 {
+		return nil, fmt.Errorf("multiple resources (%d) found matching query; specify --cluster or --namespace to disambiguate", len(records))
+	}
+
+	return &records[0], nil
+}
+
+// ListResources queries resources table filtering by any non-empty field in filter.
+func (s *PG) ListResources(
+	ctx context.Context,
+	filter datastore.ResourceInfo,
+) ([]datastore.ResourceRecord, error) {
+	baseQuery := `
+		SELECT cluster_name, group_name, version, kind, namespace, name, uid, resource_version, labels, manifest, updated_at
+		FROM resources
+		WHERE 1=1
+	`
+	var args []any
+	argID := 1
+
+	if filter.UID != "" {
+		baseQuery += fmt.Sprintf(" AND uid = $%d", argID)
+		args = append(args, filter.UID)
+		argID++
+	}
+
+	if filter.ClusterName != "" {
+		baseQuery += fmt.Sprintf(" AND cluster_name = $%d", argID)
+		args = append(args, filter.ClusterName)
+		argID++
+	}
+
+	if filter.Group != "" {
+		baseQuery += fmt.Sprintf(" AND group_name = $%d", argID)
+		args = append(args, filter.Group)
+		argID++
+	}
+
+	if filter.Version != "" {
+		baseQuery += fmt.Sprintf(" AND version = $%d", argID)
+		args = append(args, filter.Version)
+		argID++
+	}
+
+	if filter.Kind != "" {
+		baseQuery += fmt.Sprintf(" AND kind = $%d", argID)
+		args = append(args, filter.Kind)
+		argID++
+	}
+
+	if filter.Namespace != "" {
+		baseQuery += fmt.Sprintf(" AND namespace = $%d", argID)
+		args = append(args, filter.Namespace)
+		argID++
+	}
+
+	if filter.Name != "" {
+		baseQuery += fmt.Sprintf(" AND name = $%d", argID)
+		args = append(args, filter.Name)
+		argID++
+	}
+
+	baseQuery += " ORDER BY cluster_name, namespace, name"
+
+	records, err := s.fetchResourceRecords(ctx, baseQuery, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list resources: %w", err)
+	}
+
+	return records, nil
+}
+
 // FetchResourceGraph fetches a graph of related resources starting from rootResourceInfo.
 // It resolves relationships iteratively using breadth-first search.
 func (s *PG) FetchResourceGraph(

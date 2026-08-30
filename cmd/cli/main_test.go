@@ -28,4 +28,16 @@ func TestCobraRootCmdFlags(t *testing.T) {
 			t.Errorf("expected help output to contain %s flag", flag)
 		}
 	}
+
+	subcommands := []string{
+		"graph",
+		"get",
+		"describe",
+	}
+
+	for _, sub := range subcommands {
+		if !bytes.Contains([]byte(output), []byte(sub)) {
+			t.Errorf("expected help output to contain subcommand %s", sub)
+		}
+	}
 }

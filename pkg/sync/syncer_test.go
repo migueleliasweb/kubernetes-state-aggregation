@@ -2,11 +2,13 @@ package sync
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
 
 	"github.com/migueleliasweb/kubernetes-state-aggregation/pkg/config"
+	"github.com/migueleliasweb/kubernetes-state-aggregation/pkg/datastore"
 	"github.com/migueleliasweb/kubernetes-state-aggregation/pkg/datastore/memory"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -106,12 +108,17 @@ func TestClusterSyncerWithFakeClients(t *testing.T) {
 		t.Fatalf("timed out waiting for cache sync (HasSynced blocked indefinitely)")
 	}
 
-	res := mockStore.GetResource("us1", "", "v1", "Pod", "default", "pod-1")
-	if res == nil {
-		t.Fatalf("expected pod-1 to be synced to mock store")
+	res, err := mockStore.GetResource(ctx, datastore.ResourceInfo{
+		ClusterName: "us1",
+		Kind:        "Pod",
+		Name:        "pod-1",
+		Namespace:   "default",
+	})
+	if err != nil || res == nil {
+		t.Fatalf("expected pod-1 to be synced to mock store: %v", err)
 	}
-	if res.GetName() != "pod-1" {
-		t.Errorf("expected pod name pod-1, got %s", res.GetName())
+	if res.Name != "pod-1" {
+		t.Errorf("expected pod name pod-1, got %s", res.Name)
 	}
 
 	// Create new pod dynamically
@@ -128,7 +135,7 @@ func TestClusterSyncerWithFakeClients(t *testing.T) {
 		},
 	}
 
-	_, err := fakeDynClient.Resource(podGVR).Namespace("default").Create(ctx, newPod, metav1.CreateOptions{})
+	_, err = fakeDynClient.Resource(podGVR).Namespace("default").Create(ctx, newPod, metav1.CreateOptions{})
 	if err != nil {
 		t.Fatalf("failed to create pod-2 in fake dynamic client: %v", err)
 	}
@@ -136,7 +143,12 @@ func TestClusterSyncerWithFakeClients(t *testing.T) {
 	// Wait for pod-2 to appear in the mock store
 	foundPod2 := false
 	for i := 0; i < 20; i++ {
-		res2 := mockStore.GetResource("us1", "", "v1", "Pod", "default", "pod-2")
+		res2, _ := mockStore.GetResource(ctx, datastore.ResourceInfo{
+			ClusterName: "us1",
+			Kind:        "Pod",
+			Name:        "pod-2",
+			Namespace:   "default",
+		})
 		if res2 != nil {
 			foundPod2 = true
 			break
@@ -157,7 +169,13 @@ func TestClusterSyncerWithFakeClients(t *testing.T) {
 	// Wait for pod-1 to disappear from the mock store
 	deletedPod1 := false
 	for i := 0; i < 20; i++ {
-		if mockStore.GetResource("us1", "", "v1", "Pod", "default", "pod-1") == nil {
+		_, err := mockStore.GetResource(ctx, datastore.ResourceInfo{
+			ClusterName: "us1",
+			Kind:        "Pod",
+			Name:        "pod-1",
+			Namespace:   "default",
+		})
+		if errors.Is(err, datastore.ErrNotFound) {
 			deletedPod1 = true
 			break
 		}

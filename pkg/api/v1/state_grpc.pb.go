@@ -20,6 +20,8 @@ const _ = grpc.SupportPackageIsVersion9
 
 const (
 	StateService_FetchResourceGraph_FullMethodName = "/ksa.v1.StateService/FetchResourceGraph"
+	StateService_GetResource_FullMethodName        = "/ksa.v1.StateService/GetResource"
+	StateService_ListResources_FullMethodName      = "/ksa.v1.StateService/ListResources"
 )
 
 // StateServiceClient is the client API for StateService service.
@@ -29,6 +31,8 @@ const (
 // StateService provides access to aggregated Kubernetes state.
 type StateServiceClient interface {
 	FetchResourceGraph(ctx context.Context, in *FetchResourceGraphRequest, opts ...grpc.CallOption) (*FetchResourceGraphResponse, error)
+	GetResource(ctx context.Context, in *GetResourceRequest, opts ...grpc.CallOption) (*GetResourceResponse, error)
+	ListResources(ctx context.Context, in *ListResourcesRequest, opts ...grpc.CallOption) (*ListResourcesResponse, error)
 }
 
 type stateServiceClient struct {
@@ -49,6 +53,26 @@ func (c *stateServiceClient) FetchResourceGraph(ctx context.Context, in *FetchRe
 	return out, nil
 }
 
+func (c *stateServiceClient) GetResource(ctx context.Context, in *GetResourceRequest, opts ...grpc.CallOption) (*GetResourceResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetResourceResponse)
+	err := c.cc.Invoke(ctx, StateService_GetResource_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *stateServiceClient) ListResources(ctx context.Context, in *ListResourcesRequest, opts ...grpc.CallOption) (*ListResourcesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListResourcesResponse)
+	err := c.cc.Invoke(ctx, StateService_ListResources_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // StateServiceServer is the server API for StateService service.
 // All implementations must embed UnimplementedStateServiceServer
 // for forward compatibility.
@@ -56,6 +80,8 @@ func (c *stateServiceClient) FetchResourceGraph(ctx context.Context, in *FetchRe
 // StateService provides access to aggregated Kubernetes state.
 type StateServiceServer interface {
 	FetchResourceGraph(context.Context, *FetchResourceGraphRequest) (*FetchResourceGraphResponse, error)
+	GetResource(context.Context, *GetResourceRequest) (*GetResourceResponse, error)
+	ListResources(context.Context, *ListResourcesRequest) (*ListResourcesResponse, error)
 	mustEmbedUnimplementedStateServiceServer()
 }
 
@@ -68,6 +94,12 @@ type UnimplementedStateServiceServer struct{}
 
 func (UnimplementedStateServiceServer) FetchResourceGraph(context.Context, *FetchResourceGraphRequest) (*FetchResourceGraphResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method FetchResourceGraph not implemented")
+}
+func (UnimplementedStateServiceServer) GetResource(context.Context, *GetResourceRequest) (*GetResourceResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetResource not implemented")
+}
+func (UnimplementedStateServiceServer) ListResources(context.Context, *ListResourcesRequest) (*ListResourcesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListResources not implemented")
 }
 func (UnimplementedStateServiceServer) mustEmbedUnimplementedStateServiceServer() {}
 func (UnimplementedStateServiceServer) testEmbeddedByValue()                      {}
@@ -108,6 +140,42 @@ func _StateService_FetchResourceGraph_Handler(srv interface{}, ctx context.Conte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _StateService_GetResource_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetResourceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StateServiceServer).GetResource(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: StateService_GetResource_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StateServiceServer).GetResource(ctx, req.(*GetResourceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _StateService_ListResources_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListResourcesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StateServiceServer).ListResources(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: StateService_ListResources_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StateServiceServer).ListResources(ctx, req.(*ListResourcesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // StateService_ServiceDesc is the grpc.ServiceDesc for StateService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -118,6 +186,14 @@ var StateService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "FetchResourceGraph",
 			Handler:    _StateService_FetchResourceGraph_Handler,
+		},
+		{
+			MethodName: "GetResource",
+			Handler:    _StateService_GetResource_Handler,
+		},
+		{
+			MethodName: "ListResources",
+			Handler:    _StateService_ListResources_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

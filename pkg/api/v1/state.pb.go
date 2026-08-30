@@ -346,6 +346,186 @@ func (x *FetchResourceGraphResponse) GetItems() []*ResourceRecord {
 	return nil
 }
 
+// GetResourceRequest requests a single resource by its info/identifiers.
+type GetResourceRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Info          *ResourceInfo          `protobuf:"bytes,1,opt,name=info,proto3" json:"info,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetResourceRequest) Reset() {
+	*x = GetResourceRequest{}
+	mi := &file_state_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetResourceRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetResourceRequest) ProtoMessage() {}
+
+func (x *GetResourceRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_state_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetResourceRequest.ProtoReflect.Descriptor instead.
+func (*GetResourceRequest) Descriptor() ([]byte, []int) {
+	return file_state_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *GetResourceRequest) GetInfo() *ResourceInfo {
+	if x != nil {
+		return x.Info
+	}
+	return nil
+}
+
+// GetResourceResponse returns the requested resource record.
+type GetResourceResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Record        *ResourceRecord        `protobuf:"bytes,1,opt,name=record,proto3" json:"record,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetResourceResponse) Reset() {
+	*x = GetResourceResponse{}
+	mi := &file_state_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetResourceResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetResourceResponse) ProtoMessage() {}
+
+func (x *GetResourceResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_state_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetResourceResponse.ProtoReflect.Descriptor instead.
+func (*GetResourceResponse) Descriptor() ([]byte, []int) {
+	return file_state_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *GetResourceResponse) GetRecord() *ResourceRecord {
+	if x != nil {
+		return x.Record
+	}
+	return nil
+}
+
+// ListResourcesRequest requests a filtered list of resources.
+type ListResourcesRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Filter        *ResourceInfo          `protobuf:"bytes,1,opt,name=filter,proto3" json:"filter,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListResourcesRequest) Reset() {
+	*x = ListResourcesRequest{}
+	mi := &file_state_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListResourcesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListResourcesRequest) ProtoMessage() {}
+
+func (x *ListResourcesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_state_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListResourcesRequest.ProtoReflect.Descriptor instead.
+func (*ListResourcesRequest) Descriptor() ([]byte, []int) {
+	return file_state_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *ListResourcesRequest) GetFilter() *ResourceInfo {
+	if x != nil {
+		return x.Filter
+	}
+	return nil
+}
+
+// ListResourcesResponse returns the matching resource records.
+type ListResourcesResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Items         []*ResourceRecord      `protobuf:"bytes,1,rep,name=items,proto3" json:"items,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListResourcesResponse) Reset() {
+	*x = ListResourcesResponse{}
+	mi := &file_state_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListResourcesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListResourcesResponse) ProtoMessage() {}
+
+func (x *ListResourcesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_state_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListResourcesResponse.ProtoReflect.Descriptor instead.
+func (*ListResourcesResponse) Descriptor() ([]byte, []int) {
+	return file_state_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *ListResourcesResponse) GetItems() []*ResourceRecord {
+	if x != nil {
+		return x.Items
+	}
+	return nil
+}
+
 var File_state_proto protoreflect.FileDescriptor
 
 const file_state_proto_rawDesc = "" +
@@ -379,9 +559,19 @@ const file_state_proto_rawDesc = "" +
 	"\x19FetchResourceGraphRequest\x12(\n" +
 	"\x04root\x18\x01 \x01(\v2\x14.ksa.v1.ResourceInfoR\x04root\"J\n" +
 	"\x1aFetchResourceGraphResponse\x12,\n" +
-	"\x05items\x18\x01 \x03(\v2\x16.ksa.v1.ResourceRecordR\x05items2k\n" +
+	"\x05items\x18\x01 \x03(\v2\x16.ksa.v1.ResourceRecordR\x05items\">\n" +
+	"\x12GetResourceRequest\x12(\n" +
+	"\x04info\x18\x01 \x01(\v2\x14.ksa.v1.ResourceInfoR\x04info\"E\n" +
+	"\x13GetResourceResponse\x12.\n" +
+	"\x06record\x18\x01 \x01(\v2\x16.ksa.v1.ResourceRecordR\x06record\"D\n" +
+	"\x14ListResourcesRequest\x12,\n" +
+	"\x06filter\x18\x01 \x01(\v2\x14.ksa.v1.ResourceInfoR\x06filter\"E\n" +
+	"\x15ListResourcesResponse\x12,\n" +
+	"\x05items\x18\x01 \x03(\v2\x16.ksa.v1.ResourceRecordR\x05items2\x81\x02\n" +
 	"\fStateService\x12[\n" +
-	"\x12FetchResourceGraph\x12!.ksa.v1.FetchResourceGraphRequest\x1a\".ksa.v1.FetchResourceGraphResponseBFZDgithub.com/migueleliasweb/kubernetes-state-aggregation/pkg/api/v1;v1b\x06proto3"
+	"\x12FetchResourceGraph\x12!.ksa.v1.FetchResourceGraphRequest\x1a\".ksa.v1.FetchResourceGraphResponse\x12F\n" +
+	"\vGetResource\x12\x1a.ksa.v1.GetResourceRequest\x1a\x1b.ksa.v1.GetResourceResponse\x12L\n" +
+	"\rListResources\x12\x1c.ksa.v1.ListResourcesRequest\x1a\x1d.ksa.v1.ListResourcesResponseBFZDgithub.com/migueleliasweb/kubernetes-state-aggregation/pkg/api/v1;v1b\x06proto3"
 
 var (
 	file_state_proto_rawDescOnce sync.Once
@@ -395,25 +585,37 @@ func file_state_proto_rawDescGZIP() []byte {
 	return file_state_proto_rawDescData
 }
 
-var file_state_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_state_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
 var file_state_proto_goTypes = []any{
 	(*ResourceRecord)(nil),             // 0: ksa.v1.ResourceRecord
 	(*ResourceInfo)(nil),               // 1: ksa.v1.ResourceInfo
 	(*FetchResourceGraphRequest)(nil),  // 2: ksa.v1.FetchResourceGraphRequest
 	(*FetchResourceGraphResponse)(nil), // 3: ksa.v1.FetchResourceGraphResponse
-	(*timestamppb.Timestamp)(nil),      // 4: google.protobuf.Timestamp
+	(*GetResourceRequest)(nil),         // 4: ksa.v1.GetResourceRequest
+	(*GetResourceResponse)(nil),        // 5: ksa.v1.GetResourceResponse
+	(*ListResourcesRequest)(nil),       // 6: ksa.v1.ListResourcesRequest
+	(*ListResourcesResponse)(nil),      // 7: ksa.v1.ListResourcesResponse
+	(*timestamppb.Timestamp)(nil),      // 8: google.protobuf.Timestamp
 }
 var file_state_proto_depIdxs = []int32{
-	4, // 0: ksa.v1.ResourceRecord.updated_at:type_name -> google.protobuf.Timestamp
-	1, // 1: ksa.v1.FetchResourceGraphRequest.root:type_name -> ksa.v1.ResourceInfo
-	0, // 2: ksa.v1.FetchResourceGraphResponse.items:type_name -> ksa.v1.ResourceRecord
-	2, // 3: ksa.v1.StateService.FetchResourceGraph:input_type -> ksa.v1.FetchResourceGraphRequest
-	3, // 4: ksa.v1.StateService.FetchResourceGraph:output_type -> ksa.v1.FetchResourceGraphResponse
-	4, // [4:5] is the sub-list for method output_type
-	3, // [3:4] is the sub-list for method input_type
-	3, // [3:3] is the sub-list for extension type_name
-	3, // [3:3] is the sub-list for extension extendee
-	0, // [0:3] is the sub-list for field type_name
+	8,  // 0: ksa.v1.ResourceRecord.updated_at:type_name -> google.protobuf.Timestamp
+	1,  // 1: ksa.v1.FetchResourceGraphRequest.root:type_name -> ksa.v1.ResourceInfo
+	0,  // 2: ksa.v1.FetchResourceGraphResponse.items:type_name -> ksa.v1.ResourceRecord
+	1,  // 3: ksa.v1.GetResourceRequest.info:type_name -> ksa.v1.ResourceInfo
+	0,  // 4: ksa.v1.GetResourceResponse.record:type_name -> ksa.v1.ResourceRecord
+	1,  // 5: ksa.v1.ListResourcesRequest.filter:type_name -> ksa.v1.ResourceInfo
+	0,  // 6: ksa.v1.ListResourcesResponse.items:type_name -> ksa.v1.ResourceRecord
+	2,  // 7: ksa.v1.StateService.FetchResourceGraph:input_type -> ksa.v1.FetchResourceGraphRequest
+	4,  // 8: ksa.v1.StateService.GetResource:input_type -> ksa.v1.GetResourceRequest
+	6,  // 9: ksa.v1.StateService.ListResources:input_type -> ksa.v1.ListResourcesRequest
+	3,  // 10: ksa.v1.StateService.FetchResourceGraph:output_type -> ksa.v1.FetchResourceGraphResponse
+	5,  // 11: ksa.v1.StateService.GetResource:output_type -> ksa.v1.GetResourceResponse
+	7,  // 12: ksa.v1.StateService.ListResources:output_type -> ksa.v1.ListResourcesResponse
+	10, // [10:13] is the sub-list for method output_type
+	7,  // [7:10] is the sub-list for method input_type
+	7,  // [7:7] is the sub-list for extension type_name
+	7,  // [7:7] is the sub-list for extension extendee
+	0,  // [0:7] is the sub-list for field type_name
 }
 
 func init() { file_state_proto_init() }
@@ -427,7 +629,7 @@ func file_state_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_state_proto_rawDesc), len(file_state_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   4,
+			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

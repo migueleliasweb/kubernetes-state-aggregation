@@ -2,9 +2,13 @@ package datastore
 
 import (
 	"context"
+	"errors"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
+
+// ErrNotFound is returned when a requested resource does not exist in the datastore.
+var ErrNotFound = errors.New("resource not found")
 
 // Syncer defines operations for synchronizing Kubernetes state to a datastore.
 type Syncer interface {
@@ -44,4 +48,17 @@ type Fetcher interface {
 		rootResourceInfo ResourceInfo,
 		callback ResourceCallback,
 	) (*UniqueResourceCollection, error)
+
+	// GetResource queries for a single resource matching the given ResourceInfo.
+	// Returns ErrNotFound if no match is found, or an error if multiple resources match.
+	GetResource(
+		ctx context.Context,
+		info ResourceInfo,
+	) (*ResourceRecord, error)
+
+	// ListResources queries for all resources matching the specified non-empty fields in filter.
+	ListResources(
+		ctx context.Context,
+		filter ResourceInfo,
+	) ([]ResourceRecord, error)
 }

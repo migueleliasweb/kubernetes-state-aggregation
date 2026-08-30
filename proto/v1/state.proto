@@ -44,7 +44,29 @@ message FetchResourceGraphResponse {
   repeated ResourceRecord items = 1;
 }
 
+// GetResourceRequest requests a single resource by its info/identifiers.
+message GetResourceRequest {
+  ResourceInfo info = 1;
+}
+
+// GetResourceResponse returns the requested resource record.
+message GetResourceResponse {
+  ResourceRecord record = 1;
+}
+
+// ListResourcesRequest requests a filtered list of resources.
+message ListResourcesRequest {
+  ResourceInfo filter = 1;
+}
+
+// ListResourcesResponse returns the matching resource records.
+message ListResourcesResponse {
+  repeated ResourceRecord items = 1;
+}
+
 // StateService provides access to aggregated Kubernetes state.
 service StateService {
   rpc FetchResourceGraph(FetchResourceGraphRequest) returns (FetchResourceGraphResponse);
+  rpc GetResource(GetResourceRequest) returns (GetResourceResponse);
+  rpc ListResources(ListResourcesRequest) returns (ListResourcesResponse);
 }

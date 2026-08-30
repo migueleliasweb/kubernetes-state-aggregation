@@ -59,6 +59,8 @@ func newRootCmd() *cobra.Command {
 	)
 
 	cmd.AddCommand(newGraphCmd())
+	cmd.AddCommand(newGetCmd())
+	cmd.AddCommand(newDescribeCmd())
 
 	return cmd
 }

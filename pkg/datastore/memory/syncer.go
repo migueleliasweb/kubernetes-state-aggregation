@@ -2,8 +2,10 @@ package memory
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/migueleliasweb/kubernetes-state-aggregation/pkg/datastore"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -12,7 +14,7 @@ import (
 // NewSyncer initializes an empty in-memory Syncer.
 func NewSyncer() *Syncer {
 	return &Syncer{
-		resources: map[string]*unstructured.Unstructured{},
+		resources: map[string]*resourceItem{},
 	}
 }
 
@@ -49,7 +51,11 @@ func (s *Syncer) UpsertResource(
 		u.GetName(),
 	)
 
-	s.resources[key] = u.DeepCopy()
+	s.resources[key] = &resourceItem{
+		clusterName: clusterName,
+		u:           u.DeepCopy(),
+		updatedAt:   time.Now().UTC(),
+	}
 
 	return nil
 }
@@ -75,28 +81,139 @@ func (s *Syncer) DeleteResource(
 	return nil
 }
 
-// GetResource retrieves a resource by its key from the in-memory store.
+func (s *Syncer) toRecord(item *resourceItem) (datastore.ResourceRecord, error) {
+	u := item.u
+	gvk := u.GroupVersionKind()
+
+	manifestBytes, err := json.Marshal(u.Object)
+	if err != nil {
+		return datastore.ResourceRecord{}, err
+	}
+
+	labelsBytes, err := json.Marshal(u.GetLabels())
+	if err != nil {
+		return datastore.ResourceRecord{}, err
+	}
+
+	annotationsBytes, err := json.Marshal(u.GetAnnotations())
+	if err != nil {
+		return datastore.ResourceRecord{}, err
+	}
+
+	return datastore.ResourceRecord{
+		Annotations:     annotationsBytes,
+		ClusterName:     item.clusterName,
+		GroupName:       gvk.Group,
+		Kind:            gvk.Kind,
+		Labels:          labelsBytes,
+		Manifest:        manifestBytes,
+		Name:            u.GetName(),
+		Namespace:       u.GetNamespace(),
+		RawObject:       u,
+		ResourceVersion: u.GetResourceVersion(),
+		UID:             string(u.GetUID()),
+		UpdatedAt:       item.updatedAt,
+		Version:         gvk.Version,
+	}, nil
+}
+
+// GetResource queries for a single resource matching the given ResourceInfo.
 func (s *Syncer) GetResource(
-	clusterName string,
-	group string,
-	version string,
-	kind string,
-	namespace string,
-	name string,
-) *unstructured.Unstructured {
+	ctx context.Context,
+	info datastore.ResourceInfo,
+) (*datastore.ResourceRecord, error) {
+	records, err := s.ListResources(ctx, info)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(records) == 0 {
+		return nil, datastore.ErrNotFound
+	}
+
+	if len(records) > 1 {
+		return nil, fmt.Errorf("multiple resources (%d) found matching query", len(records))
+	}
+
+	return &records[0], nil
+}
+
+// ListResources queries all resources matching the specified non-empty fields in filter.
+func (s *Syncer) ListResources(
+	ctx context.Context,
+	filter datastore.ResourceInfo,
+) ([]datastore.ResourceRecord, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	key := s.getKey(
-		clusterName,
-		group,
-		version,
-		kind,
-		namespace,
-		name,
-	)
+	var records []datastore.ResourceRecord
 
-	return s.resources[key]
+	for _, item := range s.resources {
+		u := item.u
+		gvk := u.GroupVersionKind()
+
+		if filter.UID != "" && string(u.GetUID()) != filter.UID {
+			continue
+		}
+		if filter.ClusterName != "" && item.clusterName != filter.ClusterName {
+			continue
+		}
+		if filter.Group != "" && gvk.Group != filter.Group {
+			continue
+		}
+		if filter.Version != "" && gvk.Version != filter.Version {
+			continue
+		}
+		if filter.Kind != "" && gvk.Kind != filter.Kind {
+			continue
+		}
+		if filter.Namespace != "" && u.GetNamespace() != filter.Namespace {
+			continue
+		}
+		if filter.Name != "" && u.GetName() != filter.Name {
+			continue
+		}
+
+		rec, err := s.toRecord(item)
+		if err != nil {
+			return nil, err
+		}
+
+		records = append(records, rec)
+	}
+
+	return records, nil
+}
+
+// FetchResourceGraph queries for a whole resource graph starting from a rootResourceInfo.
+func (s *Syncer) FetchResourceGraph(
+	ctx context.Context,
+	rootResourceInfo datastore.ResourceInfo,
+	callback datastore.ResourceCallback,
+) (*datastore.UniqueResourceCollection, error) {
+	collection := datastore.NewUniqueResourceCollection()
+
+	roots, err := s.ListResources(ctx, rootResourceInfo)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, rec := range roots {
+		action, err := callback(rec)
+		if err != nil {
+			return nil, err
+		}
+
+		if action == datastore.ActionStop {
+			return collection, nil
+		}
+
+		if action == datastore.ActionInclude || action == datastore.ActionIncludeAndSkipChildren {
+			collection.Add(rec)
+		}
+	}
+
+	return collection, nil
 }
 
 func (s *Syncer) ListResourceKeys(
@@ -114,22 +231,22 @@ func (s *Syncer) ListResourceKeys(
 	if kind != "" {
 		prefix = fmt.Sprintf("%s/%s/%s/%s/", clusterName, group, version, kind)
 	} else {
-		// Just match the version prefix
 		prefix = fmt.Sprintf("%s/%s/%s/", clusterName, group, version)
 	}
 
-	for key, u := range s.resources {
+	for key, item := range s.resources {
 		if strings.HasPrefix(key, prefix) {
+			u := item.u
 			gvk := u.GroupVersionKind()
 			keys = append(keys, datastore.ResourceInfo{
 				ClusterName:     clusterName,
 				Group:           group,
-				Version:         version,
 				Kind:            gvk.Kind,
-				Namespace:       u.GetNamespace(),
 				Name:            u.GetName(),
-				UID:             string(u.GetUID()),
+				Namespace:       u.GetNamespace(),
 				ResourceVersion: u.GetResourceVersion(),
+				UID:             string(u.GetUID()),
+				Version:         version,
 			})
 		}
 	}
