@@ -89,28 +89,32 @@ const (
 // ResourceCallback is a function called for each node in a resource graph.
 type ResourceCallback func(resourceInfo ResourceRecord) (action WalkAction, err error)
 
+// ResourceKey is a strictly-typed string for preventing cross-cluster uniqueness collisions.
+type ResourceKey string
+
 // UniqueResourceCollection stores a collection of resources, ensuring no duplicates.
 type UniqueResourceCollection struct {
 	items []ResourceRecord
-	seen  map[string]bool
+	seen  map[ResourceKey]bool
 }
 
 // NewUniqueResourceCollection creates a new initialized UniqueResourceCollection.
 func NewUniqueResourceCollection() *UniqueResourceCollection {
 	return &UniqueResourceCollection{
 		items: []ResourceRecord{},
-		seen:  map[string]bool{},
+		seen:  map[ResourceKey]bool{},
 	}
 }
 
-func getResourceKey(clusterName, uid string) string {
-	return clusterName + "/" + uid
+// GetResourceKey creates a composite key from a cluster name and a UID to prevent cross-cluster collisions.
+func GetResourceKey(clusterName, uid string) ResourceKey {
+	return ResourceKey(clusterName + "/" + uid)
 }
 
 // Add appends a ResourceRecord to the collection if it hasn't been added yet (deduped by UID).
 // Returns true if the resource was successfully added (was unique).
 func (c *UniqueResourceCollection) Add(r ResourceRecord) bool {
-	key := getResourceKey(r.ClusterName, r.UID)
+	key := GetResourceKey(r.ClusterName, r.UID)
 	if c.seen[key] {
 		return false
 	}

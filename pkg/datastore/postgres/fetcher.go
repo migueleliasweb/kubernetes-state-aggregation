@@ -109,7 +109,7 @@ func (s *PG) FetchResourceGraph(
 
 	// Queue for BFS
 	queue := rootRecords
-	visited := map[string]bool{}
+	visited := map[datastore.ResourceKey]bool{}
 
 	for len(queue) > 0 {
 		var nextLayer []datastore.ResourceRecord
@@ -119,7 +119,7 @@ func (s *PG) FetchResourceGraph(
 		childrenByCluster := map[string][]string{}
 
 		for _, rec := range queue {
-			vKey := rec.ClusterName + "/" + rec.UID
+			vKey := datastore.GetResourceKey(rec.ClusterName, rec.UID)
 			if visited[vKey] {
 				continue
 			}
@@ -148,7 +148,7 @@ func (s *PG) FetchResourceGraph(
 				var u unstructured.Unstructured
 				if err := json.Unmarshal(rec.Manifest, &u.Object); err == nil {
 					for _, ownerRef := range u.GetOwnerReferences() {
-						pKey := rec.ClusterName + "/" + string(ownerRef.UID)
+						pKey := datastore.GetResourceKey(rec.ClusterName, string(ownerRef.UID))
 						if !visited[pKey] {
 							parentsByCluster[rec.ClusterName] = append(parentsByCluster[rec.ClusterName], string(ownerRef.UID))
 						}
