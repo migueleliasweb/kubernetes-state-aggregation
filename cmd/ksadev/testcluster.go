@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/migueleliasweb/kubernetes-state-aggregation/pkg/kwok"
 	"github.com/spf13/cobra"
@@ -56,7 +57,34 @@ func newTestClusterUpCmd() *cobra.Command {
 
 			ctx := context.Background()
 
-			return kwok.SetupClusters(ctx, opts)
+			env, err := kwok.SetupClusters(ctx, opts)
+			if err != nil {
+				return err
+			}
+
+			fmt.Println("\n========================================================")
+			fmt.Println("🚀 KWOK Test Clusters are Ready!")
+			fmt.Println("========================================================")
+			fmt.Printf("KSA Config: %s\n\n", env.ConfigPath)
+			fmt.Println("Active Clusters:")
+
+			var kubeconfigs []string
+
+			for _, cluster := range env.Clusters {
+				fmt.Printf("  - %s (kubeconfig: %s)\n", cluster.Name, cluster.KubeconfigPath)
+				kubeconfigs = append(kubeconfigs, cluster.KubeconfigPath)
+			}
+
+			fmt.Println("\nTo inspect with kubectl:")
+			fmt.Printf("  export KUBECONFIG=%s\n", strings.Join(kubeconfigs, ":"))
+			fmt.Println("  kubectl get nodes")
+			fmt.Println("  kubectl get pods -A")
+
+			fmt.Println("\nTo start KSA server (Sync worker + gRPC API on :50051):")
+			fmt.Printf("  go run ./cmd/server/main.go --config %s\n", env.ConfigPath)
+			fmt.Println("========================================================")
+
+			return nil
 		},
 	}
 

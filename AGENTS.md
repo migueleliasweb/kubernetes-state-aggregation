@@ -88,3 +88,7 @@ Always run `go fmt ./...` before wrapping up a plan's execution or concluding a 
 ## Shell & Bash Scripts
 
 When writing or modifying bash/shell scripts (`.sh` files), always use **4-space indentation** for nested blocks, control statements (`if`, `for`, `while`, `case`), and functions.
+
+## Implementation Plans & Diagrams
+
+When writing an implementation plan or design proposal, always include a concise Mermaid diagram illustrating the architecture, data flow, or component interactions of the proposed changes.

@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -14,22 +15,16 @@ import (
 	v1 "github.com/migueleliasweb/kubernetes-state-aggregation/pkg/api/v1"
 	"github.com/migueleliasweb/kubernetes-state-aggregation/pkg/api/v1/v1connect"
 	"github.com/migueleliasweb/kubernetes-state-aggregation/pkg/config"
-	"github.com/migueleliasweb/kubernetes-state-aggregation/pkg/datastore"
-	"github.com/migueleliasweb/kubernetes-state-aggregation/pkg/datastore/memory"
 	"github.com/migueleliasweb/kubernetes-state-aggregation/pkg/datastore/postgres"
 	"github.com/migueleliasweb/kubernetes-state-aggregation/pkg/kwok"
 	ksaServer "github.com/migueleliasweb/kubernetes-state-aggregation/pkg/server"
 	ksaSync "github.com/migueleliasweb/kubernetes-state-aggregation/pkg/sync"
+	tcPostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
 )
-
-type storeBackend interface {
-	datastore.Syncer
-	datastore.Fetcher
-}
 
 func TestKWOKStartupCleanupAndSync(t *testing.T) {
 	if os.Getenv("KSA_INTEGRATION_TEST") != "true" {
@@ -39,109 +34,107 @@ func TestKWOKStartupCleanupAndSync(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	mgr, err := kwok.NewClusterManager()
-	if err != nil {
-		t.Fatalf("Failed to initialize KWOK cluster manager: %v", err)
-	}
-
-	// 1. Provision 2 simulated KWOK binary clusters
+	// 1. Provision clusters and seed workloads via centralized kwok.SetupClusters
 	suffix := rand.Intn(100000)
 	c1Name := fmt.Sprintf("ksa-kwok-c1-%d", suffix)
 	c2Name := fmt.Sprintf("ksa-kwok-c2-%d", suffix)
 
-	t.Logf("Creating KWOK clusters: %s, %s", c1Name, c2Name)
-
-	if err := mgr.CreateCluster(ctx, c1Name); err != nil {
-		t.Fatalf("Failed to create cluster %s: %v", c1Name, err)
-	}
-
-	t.Cleanup(func() {
-		_ = mgr.DeleteCluster(context.Background(), c1Name)
-	})
-
-	if err := mgr.CreateCluster(ctx, c2Name); err != nil {
-		t.Fatalf("Failed to create cluster %s: %v", c2Name, err)
-	}
-
-	t.Cleanup(func() {
-		_ = mgr.DeleteCluster(context.Background(), c2Name)
-	})
-
-	// 2. Obtain REST configs and Kubeconfigs
-	restCfg1, err := mgr.GetRESTConfig(ctx, c1Name)
-	if err != nil {
-		t.Fatalf("Failed to get rest config for %s: %v", c1Name, err)
-	}
-
-	restCfg2, err := mgr.GetRESTConfig(ctx, c2Name)
-	if err != nil {
-		t.Fatalf("Failed to get rest config for %s: %v", c2Name, err)
+	scaleMode := "default"
+	if os.Getenv("KSA_TEST_SCALE") == "benchmark" {
+		scaleMode = "benchmark"
 	}
 
 	tmpDir := t.TempDir()
 
-	kubeconfig1, err := mgr.GetKubeconfigPath(ctx, c1Name, tmpDir)
+	env, err := kwok.SetupClusters(ctx, kwok.SetupOptions{
+		Clusters:         []string{c1Name, c2Name},
+		Seed:             true,
+		Scale:            scaleMode,
+		OutputConfigPath: filepath.Join(tmpDir, "kwok-config.yaml"),
+	})
 	if err != nil {
-		t.Fatalf("Failed to write kubeconfig for %s: %v", c1Name, err)
+		t.Fatalf("Failed to setup KWOK test clusters: %v", err)
 	}
 
-	kubeconfig2, err := mgr.GetKubeconfigPath(ctx, c2Name, tmpDir)
-	if err != nil {
-		t.Fatalf("Failed to write kubeconfig for %s: %v", c2Name, err)
-	}
-
-	// 3. Seed workloads into both clusters
-	scaleCfg := kwok.DefaultScaleConfig()
-	if os.Getenv("KSA_TEST_SCALE") == "benchmark" {
-		scaleCfg = kwok.BenchmarkScaleConfig()
-	}
-
-	t.Logf("Seeding workloads in %s...", c1Name)
-
-	seeder1, err := kwok.NewWorkloadSeeder(restCfg1)
-	if err != nil {
-		t.Fatalf("Failed to create seeder for %s: %v", c1Name, err)
-	}
-
-	if err := seeder1.Seed(ctx, scaleCfg); err != nil {
-		t.Fatalf("Failed to seed workloads in %s: %v", c1Name, err)
-	}
-
-	t.Logf("Seeding workloads in %s...", c2Name)
-
-	seeder2, err := kwok.NewWorkloadSeeder(restCfg2)
-	if err != nil {
-		t.Fatalf("Failed to create seeder for %s: %v", c2Name, err)
-	}
-
-	if err := seeder2.Seed(ctx, scaleCfg); err != nil {
-		t.Fatalf("Failed to seed workloads in %s: %v", c2Name, err)
-	}
-
-	// 4. Setup datastore (Postgres or In-Memory)
-	var store storeBackend
-
+	// 2. Setup PostgreSQL datastore (via testcontainers or existing DB_URL)
 	dbURL := os.Getenv("DB_URL")
-	if dbURL != "" {
-		pgStore, err := postgres.NewPGSyncer(dbURL)
+	var pgContainer *tcPostgres.PostgresContainer
+
+	if dbURL == "" {
+		t.Log("Starting ephemeral PostgreSQL container via testcontainers...")
+
+		container, err := tcPostgres.Run(
+			ctx,
+			"postgres:15-alpine",
+			tcPostgres.WithDatabase("ksa"),
+			tcPostgres.WithUsername("postgres"),
+			tcPostgres.WithPassword("password"),
+			tcPostgres.BasicWaitStrategies(),
+		)
 		if err != nil {
-			t.Fatalf("Failed to connect to Postgres: %v", err)
+			t.Fatalf("Failed to start PostgreSQL testcontainer: %v", err)
 		}
 
-		if err := pgStore.InitSchema(ctx); err != nil {
-			t.Fatalf("Failed to init Postgres schema: %v", err)
+		pgContainer = container
+
+		connStr, err := container.ConnectionString(ctx, "sslmode=disable")
+		if err != nil {
+			t.Fatalf("Failed to get connection string for PostgreSQL testcontainer: %v", err)
 		}
 
-		t.Cleanup(func() {
-			_ = pgStore.Close()
+		dbURL = connStr
+	}
+
+	t.Logf("Connecting to PostgreSQL: %s", dbURL)
+
+	store, err := postgres.NewPGSyncer(dbURL)
+	if err != nil {
+		t.Fatalf("Failed to connect to Postgres: %v", err)
+	}
+
+	if err := store.InitSchema(ctx); err != nil {
+		t.Fatalf("Failed to init Postgres schema: %v", err)
+	}
+
+	var apiServer *ksaServer.Server
+	var apiAddr string
+
+	t.Cleanup(func() {
+		if t.Failed() {
+			t.Log("\n=================================================================")
+			t.Log("⚠️ TEST FAILED: Preserving test environment for inspection!")
+			t.Log("=================================================================")
+			t.Logf("PostgreSQL DB_URL: %s", dbURL)
+			if apiAddr != "" {
+				t.Logf("KSA Server API Address: %s", apiAddr)
+			}
+			t.Logf("KSA Config Path: %s", env.ConfigPath)
+			t.Log("To inspect KWOK clusters with kubectl:")
+			t.Logf("  export KUBECONFIG=%s:%s", env.Clusters[c1Name].KubeconfigPath, env.Clusters[c2Name].KubeconfigPath)
+			t.Log("  kubectl get nodes")
+			t.Log("  kubectl get pods -A")
+			t.Log("=================================================================")
+
+			return
+		}
+
+		if apiServer != nil {
+			apiServer.GracefulStop()
+		}
+
+		_ = store.Close()
+
+		_ = kwok.TeardownClusters(context.Background(), kwok.TeardownOptions{
+			Clusters:         []string{c1Name, c2Name},
+			OutputConfigPath: env.ConfigPath,
 		})
 
-		store = pgStore
-	} else {
-		store = memory.NewSyncer()
-	}
+		if pgContainer != nil {
+			_ = pgContainer.Terminate(context.Background())
+		}
+	})
 
-	// 5. PHASE 1: Initial Sync with both clusters enabled
+	// 3. PHASE 1: Initial Sync with both clusters enabled
 	t.Log("Starting Phase 1: Initial multi-cluster sync...")
 
 	cfgPhase1 := &config.Config{
@@ -151,12 +144,12 @@ func TestKWOKStartupCleanupAndSync(t *testing.T) {
 		Clusters: []config.ClusterConfig{
 			{
 				Name:       c1Name,
-				Kubeconfig: kubeconfig1,
+				Kubeconfig: env.Clusters[c1Name].KubeconfigPath,
 				Disabled:   false,
 			},
 			{
 				Name:       c2Name,
-				Kubeconfig: kubeconfig2,
+				Kubeconfig: env.Clusters[c2Name].KubeconfigPath,
 				Disabled:   false,
 			},
 		},
@@ -199,7 +192,8 @@ func TestKWOKStartupCleanupAndSync(t *testing.T) {
 		t.Fatalf("Failed to start listener: %v", err)
 	}
 
-	apiServer := ksaServer.NewServer(
+	apiAddr = lis.Addr().String()
+	apiServer = ksaServer.NewServer(
 		store,
 		lis,
 	)
@@ -208,13 +202,9 @@ func TestKWOKStartupCleanupAndSync(t *testing.T) {
 		_ = apiServer.Serve()
 	}()
 
-	t.Cleanup(func() {
-		apiServer.GracefulStop()
-	})
-
 	apiClient := v1connect.NewStateServiceClient(
 		http.DefaultClient,
-		fmt.Sprintf("http://%s", lis.Addr().String()),
+		fmt.Sprintf("http://%s", apiAddr),
 	)
 
 	// Query via API client
@@ -253,12 +243,12 @@ func TestKWOKStartupCleanupAndSync(t *testing.T) {
 		Clusters: []config.ClusterConfig{
 			{
 				Name:       c1Name,
-				Kubeconfig: kubeconfig1,
+				Kubeconfig: env.Clusters[c1Name].KubeconfigPath,
 				Disabled:   false,
 			},
 			{
 				Name:       c2Name,
-				Kubeconfig: kubeconfig2,
+				Kubeconfig: env.Clusters[c2Name].KubeconfigPath,
 				Disabled:   true, // Disabled cluster
 			},
 		},
@@ -376,7 +366,7 @@ func TestKWOKStartupCleanupAndSync(t *testing.T) {
 	// 8. Test live synchronization of a new resource
 	t.Log("Testing live dynamic synchronization after pre-cleanup...")
 
-	dynClient1, err := dynamic.NewForConfig(restCfg1)
+	dynClient1, err := dynamic.NewForConfig(env.Clusters[c1Name].RESTConfig)
 	if err != nil {
 		t.Fatalf("Failed to create dynamic client for %s: %v", c1Name, err)
 	}

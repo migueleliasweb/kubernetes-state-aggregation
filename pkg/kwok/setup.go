@@ -8,7 +8,22 @@ import (
 	"path/filepath"
 
 	"gopkg.in/yaml.v3"
+	"k8s.io/client-go/rest"
 )
+
+// ClusterInfo contains connection and client configuration for a created KWOK cluster.
+type ClusterInfo struct {
+	Name           string       `json:"name" yaml:"name"`
+	KubeconfigPath string       `json:"kubeconfig_path" yaml:"kubeconfig_path"`
+	RESTConfig     *rest.Config `json:"-" yaml:"-"`
+}
+
+// ClusterEnvironment represents a fully configured test environment with clusters and KSA config.
+type ClusterEnvironment struct {
+	ConfigPath    string                 `json:"config_path" yaml:"config_path"`
+	KubeconfigDir string                 `json:"kubeconfig_dir" yaml:"kubeconfig_dir"`
+	Clusters      map[string]ClusterInfo `json:"clusters" yaml:"clusters"`
+}
 
 // SetupOptions defines parameters for spinning up and seeding test clusters.
 type SetupOptions struct {
@@ -48,10 +63,10 @@ type ksaConfigFile struct {
 func SetupClusters(
 	ctx context.Context,
 	opts SetupOptions,
-) error {
+) (*ClusterEnvironment, error) {
 	mgr, err := NewClusterManager()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if len(opts.Clusters) == 0 {
@@ -67,10 +82,11 @@ func SetupClusters(
 	}
 
 	if err := os.MkdirAll(opts.KubeconfigDir, 0o755); err != nil {
-		return fmt.Errorf("failed to create kubeconfig directory %s: %w", opts.KubeconfigDir, err)
+		return nil, fmt.Errorf("failed to create kubeconfig directory %s: %w", opts.KubeconfigDir, err)
 	}
 
 	var clusterEntries []ksaClusterEntry
+	clusterInfoMap := map[string]ClusterInfo{}
 
 	for _, clusterName := range opts.Clusters {
 		slog.Info(
@@ -90,11 +106,16 @@ func SetupClusters(
 
 		data, err := mgr.GetKubeconfig(ctx, clusterName)
 		if err != nil {
-			return fmt.Errorf("failed to get kubeconfig for %s: %w", clusterName, err)
+			return nil, fmt.Errorf("failed to get kubeconfig for %s: %w", clusterName, err)
 		}
 
 		if err := os.WriteFile(kubeconfigPath, data, 0o600); err != nil {
-			return fmt.Errorf("failed to write kubeconfig for %s: %w", clusterName, err)
+			return nil, fmt.Errorf("failed to write kubeconfig for %s: %w", clusterName, err)
+		}
+
+		restCfg, err := mgr.GetRESTConfig(ctx, clusterName)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get rest config for %s: %w", clusterName, err)
 		}
 
 		clusterEntries = append(clusterEntries, ksaClusterEntry{
@@ -103,6 +124,12 @@ func SetupClusters(
 			Disabled:   false,
 		})
 
+		clusterInfoMap[clusterName] = ClusterInfo{
+			Name:           clusterName,
+			KubeconfigPath: kubeconfigPath,
+			RESTConfig:     restCfg,
+		}
+
 		if opts.Seed {
 			slog.Info(
 				"Seeding mock workloads into cluster",
@@ -110,14 +137,9 @@ func SetupClusters(
 				"scale", opts.Scale,
 			)
 
-			restCfg, err := mgr.GetRESTConfig(ctx, clusterName)
-			if err != nil {
-				return fmt.Errorf("failed to get rest config for %s: %w", clusterName, err)
-			}
-
 			seeder, err := NewWorkloadSeeder(restCfg)
 			if err != nil {
-				return fmt.Errorf("failed to initialize seeder for %s: %w", clusterName, err)
+				return nil, fmt.Errorf("failed to initialize seeder for %s: %w", clusterName, err)
 			}
 
 			var scaleCfg ScaleConfig
@@ -130,7 +152,7 @@ func SetupClusters(
 			}
 
 			if err := seeder.Seed(ctx, scaleCfg); err != nil {
-				return fmt.Errorf("failed to seed cluster %s: %w", clusterName, err)
+				return nil, fmt.Errorf("failed to seed cluster %s: %w", clusterName, err)
 			}
 		}
 	}
@@ -147,15 +169,15 @@ func SetupClusters(
 
 	outBytes, err := yaml.Marshal(&cfg)
 	if err != nil {
-		return fmt.Errorf("failed to marshal KSA config: %w", err)
+		return nil, fmt.Errorf("failed to marshal KSA config: %w", err)
 	}
 
 	if err := os.MkdirAll(filepath.Dir(opts.OutputConfigPath), 0o755); err != nil {
-		return fmt.Errorf("failed to create output config directory: %w", err)
+		return nil, fmt.Errorf("failed to create output config directory: %w", err)
 	}
 
 	if err := os.WriteFile(opts.OutputConfigPath, outBytes, 0o644); err != nil {
-		return fmt.Errorf("failed to write KSA config file to %s: %w", opts.OutputConfigPath, err)
+		return nil, fmt.Errorf("failed to write KSA config file to %s: %w", opts.OutputConfigPath, err)
 	}
 
 	slog.Info(
@@ -164,7 +186,11 @@ func SetupClusters(
 		"clustersCount", len(opts.Clusters),
 	)
 
-	return nil
+	return &ClusterEnvironment{
+		ConfigPath:    opts.OutputConfigPath,
+		KubeconfigDir: opts.KubeconfigDir,
+		Clusters:      clusterInfoMap,
+	}, nil
 }
 
 // TeardownClusters deletes the specified KWOK clusters and cleans up generated configuration files.
