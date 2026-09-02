@@ -33,6 +33,9 @@ go.work.sum
 # .idea/
 # .vscode/
 
+# Debug
+__debug_bin
+
 # Hack config
 /hack/config.yaml
 

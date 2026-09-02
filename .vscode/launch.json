@@ -1,0 +1,22 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Test: KWOK Integration",
+            "type": "go",
+            "request": "launch",
+            "mode": "test",
+            "program": "${workspaceFolder}/tests/integration",
+            "env": {
+                "KSA_INTEGRATION_TEST": "true"
+            },
+            "args": [
+                "-test.v",
+                "-test.run",
+                "^TestKWOKStartupCleanupAndSync$"
+            ]
+        }
+    ]
+}

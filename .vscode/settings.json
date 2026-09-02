@@ -1,0 +1,10 @@
+{
+    "go.testTimeout": "300s",
+    "go.testFlags": [
+        "-race",
+        "-v",
+        "-count=1",
+        // needed to output coverage when running e2e tests (tests across packages)
+        "-coverpkg=github.com/migueleliasweb/kubernetes-state-aggregation/...",
+    ],
+}

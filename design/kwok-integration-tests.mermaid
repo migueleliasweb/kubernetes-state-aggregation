@@ -1,0 +1,41 @@
+flowchart TD
+    subgraph Clusters["KWOK Simulated Clusters (runtime=binary)"]
+        C1["Cluster 1 (e.g. ksa-kwok-us-east)<br/>- Nodes, Pods, ConfigMaps, Services<br/>- Namespaces: default, prod, kube-system"]
+        C2["Cluster 2 (e.g. ksa-kwok-eu-west)<br/>- Nodes, Pods, ClusterRoles<br/>- Namespaces: default, stage, monitoring"]
+    end
+
+    subgraph DevTooling["Developer Tooling & Testing"]
+        KSADev["cmd/ksadev CLI<br/>(ksadev testcluster up|down)"]
+        TestSuite["Go Test Suite<br/>(tests/integration)"]
+    end
+
+    subgraph CorePackage["pkg/kwok (Consolidated Engine)"]
+        Manager["ClusterManager<br/>(kwokctl create, delete, kubeconfig)"]
+        Seeder["WorkloadSeeder<br/>(Concurrent client-go batch creator)"]
+        Setup["Environment Orchestrator<br/>(SetupClusters / TeardownClusters)"]
+    end
+
+    subgraph Stack["KSA Core Stack"]
+        Syncer["KSA Sync Manager<br/>(RunStartupCleanup + Continuous Informers)"]
+        PG[(PostgreSQL Datastore)]
+        APIServer["KSA gRPC & Connect API Server (:50051)"]
+    end
+
+    subgraph Clients["Validation & UI/Backend Dev"]
+        TestClient["Go Integration Test Assertions"]
+        WebUI["External Web UI / Backend Client"]
+    end
+
+    KSADev -->|Invokes| Setup
+    Setup -->|Uses| Manager
+    Setup -->|Uses| Seeder
+    TestSuite -->|Uses| Manager
+    TestSuite -->|Uses| Seeder
+
+    Manager -->|1. Provisions / Deletes| Clusters
+    Seeder -->|2. Populates heavy state| Clusters
+    Syncer -->|3. Syncs & Cleans up| Clusters
+    Syncer -->|4. Writes aggregated state| PG
+    APIServer -->|5. Reads from| PG
+    TestClient -->|6. Asserts cleanup & query accuracy| APIServer
+    WebUI -.->|Dev mode: Connects to| APIServer
