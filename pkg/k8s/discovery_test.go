@@ -20,6 +20,7 @@ func TestDiscoverWatchableResources(t *testing.T) {
 						{Name: "pods", Kind: "Pod", Namespaced: true, Verbs: metav1.Verbs{"get", "list", "watch"}},
 						{Name: "pods/status", Kind: "Pod", Namespaced: true, Verbs: metav1.Verbs{"get", "patch"}},
 						{Name: "events", Kind: "Event", Namespaced: true, Verbs: metav1.Verbs{"get", "list", "watch"}},
+						{Name: "nodes", Kind: "Node", Namespaced: false, Verbs: metav1.Verbs{"get", "list", "watch"}},
 					},
 				},
 				{
@@ -32,6 +33,7 @@ func TestDiscoverWatchableResources(t *testing.T) {
 		},
 	}
 
+	// 1. Without IncludeClusterScoped (default false): nodes should be excluded
 	filters := config.FilterConfig{
 		ExcludeResources: []string{"events"},
 	}
@@ -61,5 +63,20 @@ func TestDiscoverWatchableResources(t *testing.T) {
 		if !res.Namespaced {
 			t.Errorf("expected %v to be namespaced", res.GVR)
 		}
+	}
+
+	// 2. With IncludeClusterScoped: true, nodes should be discovered
+	filtersWithClusterScoped := config.FilterConfig{
+		ExcludeResources:     []string{"events"},
+		IncludeClusterScoped: true,
+	}
+
+	resourcesWithCS, err := DiscoverWatchableResources(fakeDiscovery, filtersWithClusterScoped)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(resourcesWithCS) != 3 {
+		t.Fatalf("expected 3 resources (pods, nodes, deployments), got %d", len(resourcesWithCS))
 	}
 }

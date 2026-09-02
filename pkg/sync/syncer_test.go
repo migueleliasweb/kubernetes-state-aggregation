@@ -206,4 +206,13 @@ func TestClusterSyncerFilters(t *testing.T) {
 	if !filters.MatchesNamespace("") {
 		t.Errorf("expected cluster scoped (empty namespace) to match when IncludeClusterScoped is true")
 	}
+
+	filtersNoCluster := config.FilterConfig{
+		IncludeNamespaces:    []string{"default"},
+		IncludeClusterScoped: false,
+	}
+
+	if filtersNoCluster.MatchesNamespace("") {
+		t.Errorf("expected cluster scoped (empty namespace) to not match when IncludeClusterScoped is false")
+	}
 }

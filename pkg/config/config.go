@@ -110,9 +110,9 @@ func (c *Config) GetEffectiveFilters(clusterName string) FilterConfig {
 
 // MatchesNamespace checks if a namespace matches the include/exclude filter rules.
 func (f *FilterConfig) MatchesNamespace(ns string) bool {
-	// If the resource is cluster-scoped (empty namespace) and the flag is true, include it.
-	if ns == "" && f.IncludeClusterScoped {
-		return true
+	// If the resource is cluster-scoped (empty namespace), check the IncludeClusterScoped flag.
+	if ns == "" {
+		return f.IncludeClusterScoped
 	}
 
 	if len(f.ExcludeNamespaces) > 0 {

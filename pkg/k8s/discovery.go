@@ -52,6 +52,11 @@ func DiscoverWatchableResources(
 				continue
 			}
 
+			// Skip cluster-scoped resources if not enabled
+			if !apiRes.Namespaced && !filters.IncludeClusterScoped {
+				continue
+			}
+
 			// Format resource strings for filtering check (e.g. "pods", "v1/pods", "apps/v1/deployments")
 			gvrStr := apiRes.Name
 			fullGVRStr := fmt.Sprintf("%s/%s", gv.String(), apiRes.Name)

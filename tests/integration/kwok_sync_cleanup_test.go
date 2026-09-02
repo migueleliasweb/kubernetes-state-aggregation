@@ -15,11 +15,9 @@ import (
 	v1 "github.com/migueleliasweb/kubernetes-state-aggregation/pkg/api/v1"
 	"github.com/migueleliasweb/kubernetes-state-aggregation/pkg/api/v1/v1connect"
 	"github.com/migueleliasweb/kubernetes-state-aggregation/pkg/config"
-	"github.com/migueleliasweb/kubernetes-state-aggregation/pkg/datastore/postgres"
-	"github.com/migueleliasweb/kubernetes-state-aggregation/pkg/kwok"
 	ksaServer "github.com/migueleliasweb/kubernetes-state-aggregation/pkg/server"
 	ksaSync "github.com/migueleliasweb/kubernetes-state-aggregation/pkg/sync"
-	tcPostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
+	"github.com/migueleliasweb/kubernetes-state-aggregation/pkg/testenv"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -34,7 +32,7 @@ func TestKWOKStartupCleanupAndSync(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	// 1. Provision clusters and seed workloads via centralized kwok.SetupClusters
+	// 1. Provision clusters, seed workloads, and launch PostgreSQL via testenv.Setup
 	suffix := rand.Intn(100000)
 	c1Name := fmt.Sprintf("ksa-kwok-c1-%d", suffix)
 	c2Name := fmt.Sprintf("ksa-kwok-c2-%d", suffix)
@@ -46,74 +44,28 @@ func TestKWOKStartupCleanupAndSync(t *testing.T) {
 
 	tmpDir := t.TempDir()
 
-	env, err := kwok.SetupClusters(ctx, kwok.SetupOptions{
+	env, err := testenv.Setup(ctx, testenv.SetupOptions{
 		Clusters:         []string{c1Name, c2Name},
 		Seed:             true,
 		Scale:            scaleMode,
 		OutputConfigPath: filepath.Join(tmpDir, "kwok-config.yaml"),
 	})
 	if err != nil {
-		t.Fatalf("Failed to setup KWOK test clusters: %v", err)
+		t.Fatalf("Failed to setup test environment: %v", err)
 	}
 
-	// 2. Setup PostgreSQL datastore (via testcontainers or existing DB_URL)
-	dbURL := os.Getenv("DB_URL")
-	var pgContainer *tcPostgres.PostgresContainer
-
-	if dbURL == "" {
-		t.Log("Starting ephemeral PostgreSQL container via testcontainers...")
-
-		container, err := tcPostgres.Run(
-			ctx,
-			"postgres:15-alpine",
-			tcPostgres.WithDatabase("ksa"),
-			tcPostgres.WithUsername("postgres"),
-			tcPostgres.WithPassword("password"),
-			tcPostgres.BasicWaitStrategies(),
-		)
-		if err != nil {
-			t.Fatalf("Failed to start PostgreSQL testcontainer: %v", err)
-		}
-
-		pgContainer = container
-
-		connStr, err := container.ConnectionString(ctx, "sslmode=disable")
-		if err != nil {
-			t.Fatalf("Failed to get connection string for PostgreSQL testcontainer: %v", err)
-		}
-
-		dbURL = connStr
-	}
-
-	t.Logf("Connecting to PostgreSQL: %s", dbURL)
-
-	store, err := postgres.NewPGSyncer(dbURL)
-	if err != nil {
-		t.Fatalf("Failed to connect to Postgres: %v", err)
-	}
-
-	if err := store.InitSchema(ctx); err != nil {
-		t.Fatalf("Failed to init Postgres schema: %v", err)
-	}
+	store := env.Store
 
 	var apiServer *ksaServer.Server
 	var apiAddr string
 
 	t.Cleanup(func() {
 		if t.Failed() {
-			t.Log("\n=================================================================")
-			t.Log("⚠️ TEST FAILED: Preserving test environment for inspection!")
-			t.Log("=================================================================")
-			t.Logf("PostgreSQL DB_URL: %s", dbURL)
 			if apiAddr != "" {
-				t.Logf("KSA Server API Address: %s", apiAddr)
+				env.PrintDebugInfo(t, fmt.Sprintf("KSA Server API Address: %s", apiAddr))
+			} else {
+				env.PrintDebugInfo(t)
 			}
-			t.Logf("KSA Config Path: %s", env.ConfigPath)
-			t.Log("To inspect KWOK clusters with kubectl:")
-			t.Logf("  export KUBECONFIG=%s:%s", env.Clusters[c1Name].KubeconfigPath, env.Clusters[c2Name].KubeconfigPath)
-			t.Log("  kubectl get nodes")
-			t.Log("  kubectl get pods -A")
-			t.Log("=================================================================")
 
 			return
 		}
@@ -122,15 +74,8 @@ func TestKWOKStartupCleanupAndSync(t *testing.T) {
 			apiServer.GracefulStop()
 		}
 
-		_ = store.Close()
-
-		_ = kwok.TeardownClusters(context.Background(), kwok.TeardownOptions{
-			Clusters:         []string{c1Name, c2Name},
-			OutputConfigPath: env.ConfigPath,
-		})
-
-		if pgContainer != nil {
-			_ = pgContainer.Terminate(context.Background())
+		if err := env.Teardown(context.Background()); err != nil {
+			t.Logf("Teardown warning: %v", err)
 		}
 	})
 

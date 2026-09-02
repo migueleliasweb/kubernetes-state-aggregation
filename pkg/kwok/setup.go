@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 	"k8s.io/client-go/rest"
@@ -33,6 +34,7 @@ type SetupOptions struct {
 	ScaleConfig      *ScaleConfig `json:"scale_config,omitempty" yaml:"scale_config,omitempty"`
 	OutputConfigPath string       `json:"output_config_path" yaml:"output_config_path"`
 	KubeconfigDir    string       `json:"kubeconfig_dir" yaml:"kubeconfig_dir"`
+	CleanExisting    bool         `json:"clean_existing" yaml:"clean_existing"`
 }
 
 // TeardownOptions defines parameters for tearing down test clusters.
@@ -67,6 +69,15 @@ func SetupClusters(
 	mgr, err := NewClusterManager()
 	if err != nil {
 		return nil, err
+	}
+
+	if opts.CleanExisting {
+		if err := CleanupExistingClusters(ctx, "ksa-kwok-", "ksa-"); err != nil {
+			slog.Warn(
+				"Failed to pre-clean existing KWOK clusters",
+				"err", err,
+			)
+		}
 	}
 
 	if len(opts.Clusters) == 0 {
@@ -234,6 +245,56 @@ func TeardownClusters(
 		"Test clusters teardown complete",
 		"clustersCount", len(opts.Clusters),
 	)
+
+	return nil
+}
+
+// CleanupExistingClusters deletes any existing KWOK clusters matching any of the provided prefixes.
+// If no prefixes are provided, it defaults to matching clusters with prefix "ksa-".
+func CleanupExistingClusters(
+	ctx context.Context,
+	prefixes ...string,
+) error {
+	mgr, err := NewClusterManager()
+	if err != nil {
+		return err
+	}
+
+	clusters, err := mgr.ListClusters(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to list KWOK clusters for cleanup: %w", err)
+	}
+
+	if len(prefixes) == 0 {
+		prefixes = []string{"ksa-"}
+	}
+
+	for _, clusterName := range clusters {
+		matches := false
+
+		for _, prefix := range prefixes {
+			if strings.HasPrefix(clusterName, prefix) {
+				matches = true
+
+				break
+			}
+		}
+
+		if matches {
+			slog.Info(
+				"Cleaning up existing KWOK cluster",
+				"cluster", clusterName,
+			)
+
+			if err := mgr.DeleteCluster(ctx, clusterName); err != nil {
+				slog.Warn(
+					"Failed to delete existing KWOK cluster during cleanup",
+					"cluster", clusterName,
+					"err", err,
+				)
+			}
+		}
+	}
 
 	return nil
 }

@@ -70,6 +70,7 @@ func TestKsadevTestclusterUpFlags(t *testing.T) {
 		"--scale",
 		"--output-config",
 		"--config",
+		"--clean",
 	}
 
 	for _, flag := range flags {
@@ -97,6 +98,7 @@ func TestKsadevTestclusterDownFlags(t *testing.T) {
 		"--clusters",
 		"--output-config",
 		"--config",
+		"--all",
 	}
 
 	for _, flag := range flags {

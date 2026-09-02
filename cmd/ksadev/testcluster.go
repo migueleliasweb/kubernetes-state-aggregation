@@ -26,11 +26,12 @@ func newTestClusterCmd() *cobra.Command {
 
 func newTestClusterUpCmd() *cobra.Command {
 	var (
-		clusters     []string
-		seed         bool
-		scale        string
-		outputConfig string
-		configPath   string
+		clusters      []string
+		seed          bool
+		scale         string
+		outputConfig  string
+		configPath    string
+		cleanExisting bool
 	)
 
 	cmd := &cobra.Command{
@@ -42,6 +43,7 @@ func newTestClusterUpCmd() *cobra.Command {
 				Seed:             seed,
 				Scale:            scale,
 				OutputConfigPath: outputConfig,
+				CleanExisting:    cleanExisting,
 			}
 
 			if configPath != "" {
@@ -119,6 +121,12 @@ func newTestClusterUpCmd() *cobra.Command {
 		"",
 		"Optional path to a YAML configuration file to override options",
 	)
+	cmd.Flags().BoolVar(
+		&cleanExisting,
+		"clean",
+		false,
+		"Whether to clean up existing KSA KWOK clusters before spinning up new ones",
+	)
 
 	return cmd
 }
@@ -128,12 +136,19 @@ func newTestClusterDownCmd() *cobra.Command {
 		clusters     []string
 		outputConfig string
 		configPath   string
+		all          bool
 	)
 
 	cmd := &cobra.Command{
 		Use:   "down",
 		Short: "Tear down KWOK test clusters and clean up generated configs",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := context.Background()
+
+			if all {
+				return kwok.CleanupExistingClusters(ctx, "ksa-kwok-", "ksa-")
+			}
+
 			opts := kwok.TeardownOptions{
 				Clusters:         clusters,
 				OutputConfigPath: outputConfig,
@@ -163,8 +178,6 @@ func newTestClusterDownCmd() *cobra.Command {
 				opts.KubeconfigDir = filepath.Join(filepath.Dir(opts.OutputConfigPath), ".kwok-configs")
 			}
 
-			ctx := context.Background()
-
 			return kwok.TeardownClusters(ctx, opts)
 		},
 	}
@@ -187,6 +200,12 @@ func newTestClusterDownCmd() *cobra.Command {
 		"c",
 		"",
 		"Optional path to a YAML configuration file to determine cluster names",
+	)
+	cmd.Flags().BoolVar(
+		&all,
+		"all",
+		false,
+		"Delete all existing KSA KWOK clusters",
 	)
 
 	return cmd
